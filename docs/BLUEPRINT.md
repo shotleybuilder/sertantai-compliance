@@ -1,0 +1,520 @@
+# Starter Template Blueprint
+
+**Version**: 1.0
+**Status**: Production Ready
+
+## Overview
+
+This is a production-ready starter template for building full-stack, real-time, offline-first applications using modern technologies:
+
+- **Backend**: Elixir + Phoenix + Ash Framework 3.0
+- **Frontend**: SvelteKit + TypeScript + TanStack DB
+- **Real-time Sync**: ElectricSQL v1.0 (HTTP Shape API)
+- **Database**: PostgreSQL 15+ with logical replication
+- **Styling**: TailwindCSS v4
+- **Quality**: Comprehensive tooling and CI/CD
+
+## Architecture
+
+### Tech Stack Rationale
+
+#### Backend: Elixir + Phoenix + Ash Framework
+
+**Elixir/Phoenix**:
+- Excellent concurrency model (BEAM VM)
+- Built-in fault tolerance
+- Real-time capabilities (Phoenix Channels, LiveView)
+- Strong ecosystem for web applications
+
+**Ash Framework 3.0**:
+- Declarative resource definitions reduce boilerplate
+- Built-in authorization and validation
+- Automatic GraphQL/JSON API generation
+- Powerful querying with relationships
+- Changes are expressed as data, enabling audit trails and reversibility
+
+#### Frontend: SvelteKit + TanStack DB
+
+**SvelteKit**:
+- Compile-time framework (no virtual DOM overhead)
+- Excellent TypeScript support
+- File-based routing
+- SSR and static generation options
+- Smaller bundle sizes
+
+**TanStack DB**:
+- Differential dataflow for reactive queries
+- Local-first data layer
+- Normalized storage with denormalized queries
+- Sub-millisecond query performance
+- Perfect complement to ElectricSQL
+
+#### Real-time Sync: ElectricSQL v1.0
+
+**Why ElectricSQL**:
+- True offline-first architecture
+- Automatic conflict resolution
+- Uses PostgreSQL logical replication (battle-tested)
+- New HTTP Shape API (simpler than v0.x WebSocket approach)
+- Built-in authentication support
+- Works with any PostgreSQL database
+
+**Data Flow**:
+```
+PostgreSQL (source of truth)
+    ↓ (logical replication)
+ElectricSQL (sync service)
+    ↓ (HTTP Shape API)
+TanStack DB (client store)
+    ↓ (reactive queries)
+Svelte UI (components)
+```
+
+### Multi-Tenancy Pattern
+
+This template implements organization-based multi-tenancy:
+
+**Base Resources** (included):
+- `User` - User accounts
+- `Organization` - Tenant boundaries
+
+**Your Domain Resources** (add your own):
+- All resources should include `organization_id` for data isolation
+- ElectricSQL shapes can be filtered by organization
+- Row-level security can be implemented in PostgreSQL
+
+**Example**:
+```elixir
+defmodule YourApp.YourDomain.YourResource do
+  use Ash.Resource,
+    domain: YourApp.Api,
+    data_layer: AshPostgres.DataLayer
+
+  postgres do
+    table "your_resources"
+    repo YourApp.Repo
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, allow_nil?: false
+    attribute :organization_id, :uuid, allow_nil?: false
+    create_timestamp :inserted_at
+    update_timestamp :updated_at
+  end
+
+  relationships do
+    belongs_to :organization, YourApp.Auth.Organization
+  end
+
+  actions do
+    defaults [:read, :destroy]
+
+    create :create do
+      accept [:name, :organization_id]
+    end
+
+    update :update do
+      accept [:name]
+    end
+
+    read :by_organization do
+      argument :organization_id, :uuid, allow_nil?: false
+      filter expr(organization_id == ^arg(:organization_id))
+    end
+  end
+end
+```
+
+### Authentication Options
+
+#### Option 1: Centralized Auth Service (Recommended for Microservices)
+
+If you're building multiple applications that share users:
+
+1. Create a separate auth service (e.g., `your-auth-service`)
+2. Auth service owns `users`, `organizations`, `sessions` tables
+3. Auth service issues JWTs with claims: `user_id`, `organization_id`, `roles`
+4. This app syncs user/org data via ElectricSQL (read-only)
+5. This app validates JWTs from the auth service
+
+**Benefits**:
+- Single sign-on across all apps
+- Centralized user management
+- Independent deployment of apps
+- Consistent authentication logic
+
+**Implementation**:
+```elixir
+# In your auth service
+defmodule AuthService.Accounts.User do
+  use Ash.Resource,
+    domain: AuthService.Accounts,
+    data_layer: AshPostgres.DataLayer
+
+  # Full CRUD actions for user management
+  actions do
+    defaults [:read, :create, :update, :destroy]
+    # ... authentication actions
+  end
+end
+
+# In this app (read-only sync)
+defmodule SertantaiCompliance.Auth.User do
+  use Ash.Resource,
+    domain: SertantaiCompliance.Api,
+    data_layer: AshPostgres.DataLayer
+
+  # Read-only - synced from auth service
+  actions do
+    defaults [:read]
+  end
+end
+```
+
+#### Option 2: Local Authentication
+
+For standalone applications:
+
+1. Add password hashing to User resource (use Bcrypt/Argon2)
+2. Implement login/logout/registration actions
+3. Generate and validate JWTs locally
+4. Store sessions in database or Redis
+
+**Example**:
+```elixir
+defmodule SertantaiCompliance.Auth.User do
+  use Ash.Resource,
+    domain: SertantaiCompliance.Api,
+    data_layer: AshPostgres.DataLayer
+
+  attributes do
+    uuid_primary_key :id
+    attribute :email, :string, allow_nil?: false
+    attribute :hashed_password, :string, allow_nil?: false, private?: true
+    attribute :organization_id, :uuid, allow_nil?: false
+  end
+
+  actions do
+    create :register do
+      argument :password, :string, allow_nil?: false, sensitive?: true
+      argument :password_confirmation, :string, allow_nil?: false, sensitive?: true
+
+      change fn changeset, _context ->
+        password = Ash.Changeset.get_argument(changeset, :password)
+        hashed = Bcrypt.hash_pwd_salt(password)
+        Ash.Changeset.change_attribute(changeset, :hashed_password, hashed)
+      end
+    end
+
+    read :authenticate do
+      argument :email, :string, allow_nil?: false
+      argument :password, :string, allow_nil?: false, sensitive?: true
+
+      filter expr(email == ^arg(:email))
+
+      # Validate password in controller/plug
+    end
+  end
+end
+```
+
+### Real-time Sync with ElectricSQL
+
+#### Backend Setup
+
+1. **Enable logical replication** in PostgreSQL:
+```sql
+-- postgresql.conf
+wal_level = logical
+max_replication_slots = 10
+max_wal_senders = 10
+```
+
+2. **Grant permissions** to ElectricSQL:
+```sql
+-- In migration
+execute "ALTER TABLE your_resources REPLICA IDENTITY FULL"
+execute "ELECTRIC GRANT ALL ON your_resources TO ANYONE"
+-- Or with row-level security:
+-- execute "ELECTRIC GRANT SELECT ON your_resources TO AUTHENTICATED WHERE organization_id = auth.organization_id()"
+```
+
+3. **Configure ElectricSQL** in docker-compose:
+```yaml
+electric:
+  image: electricsql/electric:latest
+  environment:
+    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/your_app_dev
+    HTTP_PORT: 3000
+    ELECTRIC_INSECURE: "true"  # Development only!
+```
+
+#### Frontend Integration
+
+```typescript
+// lib/electric/client.ts
+import { ShapeStream } from '@electric-sql/client'
+
+export async function syncCollection(
+  collection: string,
+  organizationId: string
+) {
+  const stream = new ShapeStream({
+    url: `${ELECTRIC_URL}/v1/shape`,
+    params: {
+      table: collection,
+      where: `organization_id='${organizationId}'`
+    }
+  })
+
+  stream.subscribe((messages) => {
+    // Update TanStack DB
+    db.collections[collection].load(messages)
+  })
+}
+```
+
+## Development Workflow
+
+### Adding a New Resource
+
+1. **Create resource file**:
+```bash
+# backend/lib/sertantai_compliance/your_domain/your_resource.ex
+```
+
+2. **Define resource with Ash**:
+```elixir
+defmodule SertantaiCompliance.YourDomain.YourResource do
+  use Ash.Resource,
+    domain: SertantaiCompliance.Api,
+    data_layer: AshPostgres.DataLayer
+
+  postgres do
+    table "your_resources"
+    repo SertantaiCompliance.Repo
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, allow_nil?: false
+    attribute :organization_id, :uuid, allow_nil?: false
+    create_timestamp :inserted_at
+    update_timestamp :updated_at
+  end
+
+  relationships do
+    belongs_to :organization, SertantaiCompliance.Auth.Organization
+  end
+
+  actions do
+    defaults [:read, :create, :update, :destroy]
+  end
+end
+```
+
+3. **Add to domain**:
+```elixir
+# lib/sertantai_compliance/api.ex
+defmodule SertantaiCompliance.Api do
+  use Ash.Domain
+
+  resources do
+    resource SertantaiCompliance.Auth.User
+    resource SertantaiCompliance.Auth.Organization
+    resource SertantaiCompliance.YourDomain.YourResource  # Add here
+  end
+end
+```
+
+4. **Generate migration**:
+```bash
+mix ash_postgres.generate_migrations --name add_your_resources
+mix ash_postgres.migrate
+```
+
+5. **Create frontend collection** (if syncing with Electric):
+```typescript
+// frontend/src/lib/db/collections.ts
+export const collections = {
+  your_resources: {
+    schema: {
+      id: 'string',
+      name: 'string',
+      organization_id: 'string',
+      inserted_at: 'string',
+      updated_at: 'string'
+    },
+    primaryKey: 'id'
+  }
+}
+```
+
+### Testing Strategy
+
+#### Backend Tests
+
+```elixir
+# test/sertantai_compliance/your_domain/your_resource_test.exs
+defmodule SertantaiCompliance.YourDomain.YourResourceTest do
+  use SertantaiCompliance.DataCase
+
+  alias SertantaiCompliance.YourDomain.YourResource
+
+  describe "create/1" do
+    test "creates resource with valid data" do
+      org = create_organization()
+
+      assert {:ok, resource} =
+        YourResource
+        |> Ash.Changeset.for_create(:create, %{
+          name: "Test Resource",
+          organization_id: org.id
+        })
+        |> Ash.create()
+
+      assert resource.name == "Test Resource"
+      assert resource.organization_id == org.id
+    end
+  end
+end
+```
+
+#### Frontend Tests
+
+```typescript
+// src/lib/components/YourComponent.test.ts
+import { render, screen } from '@testing-library/svelte'
+import { describe, it, expect } from 'vitest'
+import YourComponent from './YourComponent.svelte'
+
+describe('YourComponent', () => {
+  it('renders correctly', () => {
+    render(YourComponent, { props: { name: 'Test' } })
+    expect(screen.getByText('Test')).toBeInTheDocument()
+  })
+})
+```
+
+## Deployment
+
+### Backend (Docker)
+
+```dockerfile
+# Dockerfile
+FROM elixir:1.16-alpine AS build
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache build-base git
+
+# Install hex and rebar
+RUN mix local.hex --force && \
+    mix local.rebar --force
+
+# Copy mix files
+COPY mix.exs mix.lock ./
+RUN mix deps.get --only prod
+RUN mix deps.compile
+
+# Copy application files
+COPY . .
+RUN mix compile
+
+# Build release
+RUN mix release
+
+# Runtime stage
+FROM alpine:3.18
+
+RUN apk add --no-cache openssl ncurses-libs
+
+WORKDIR /app
+
+COPY --from=build /app/_build/prod/rel/sertantai_compliance ./
+
+EXPOSE 4000
+
+CMD ["bin/sertantai_compliance", "start"]
+```
+
+### Frontend (Static)
+
+```bash
+# Build
+npm run build
+
+# Deploy to CDN (Cloudflare Pages, Netlify, Vercel, etc.)
+# dist/ folder contains the built assets
+```
+
+### Database Migrations
+
+Migrations run automatically on backend startup in production. Set:
+
+```elixir
+# config/prod.exs
+config :sertantai_compliance, SertantaiCompliance.Repo,
+  migration_primary_key: [type: :uuid],
+  migration_timestamps: [type: :utc_datetime_usec]
+```
+
+## Quality Tools
+
+### Backend
+
+- **Credo**: Static analysis for code quality
+- **Dialyzer**: Type checking and bug detection
+- **ExUnit**: Testing framework
+- **Formatter**: Code formatting
+
+### Frontend
+
+- **ESLint**: JavaScript/TypeScript linting
+- **Prettier**: Code formatting
+- **TypeScript**: Static typing
+- **Vitest**: Unit testing
+
+### CI/CD
+
+**Git Hooks** (pre-commit):
+- Format code (mix format, prettier)
+- Run linters (credo, eslint)
+
+**Git Hooks** (pre-push):
+- Run tests
+- Type checking (dialyzer, tsc)
+
+**GitHub Actions**:
+- Run all quality checks on PR
+- Run integration tests
+- Deploy on merge to main
+
+## Customization Checklist
+
+- [ ] Rename app (SertantaiCompliance → YourApp)
+- [ ] Update database names
+- [ ] Add your domain resources
+- [ ] Update environment variables
+- [ ] Configure authentication strategy
+- [ ] Set up ElectricSQL sync for your resources
+- [ ] Create frontend collections for synced data
+- [ ] Write tests for your resources
+- [ ] Update README with your app description
+- [ ] Configure deployment (Docker, CDN)
+- [ ] Set up monitoring and logging
+- [ ] Configure production secrets
+
+## Resources
+
+- [Ash Framework Docs](https://hexdocs.pm/ash)
+- [ElectricSQL Docs](https://electric-sql.com)
+- [TanStack DB Docs](https://tanstack.com/db)
+- [Phoenix Framework](https://phoenixframework.org)
+- [SvelteKit Docs](https://kit.svelte.dev)
+
+## License
+
+This template is provided as-is for building your applications. Modify as needed for your use case.

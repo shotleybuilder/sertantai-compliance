@@ -9,7 +9,7 @@ import Config
 
 config :sertantai_compliance,
   ecto_repos: [SertantaiCompliance.Repo],
-  ash_domains: [SertantaiCompliance.Api],
+  ash_domains: [SertantaiCompliance.Api, SertantaiCompliance.Sync],
   generators: [timestamp_type: :utc_datetime]
 
 # Configures the endpoint

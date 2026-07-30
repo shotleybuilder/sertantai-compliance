@@ -806,7 +806,7 @@ defmodule SertantaiComplianceWeb.ScreeningController do
          status_before,
          status_after,
          source,
-         metadata \\ nil
+         metadata
        ) do
     ApplicabilityEvent.log(%{
       organization_id: org_id,
@@ -845,6 +845,8 @@ defmodule SertantaiComplianceWeb.ScreeningController do
 
   # Temporary: query actor labels from legal_register JSONB fields.
   # Will be replaced when ActorDictionary gets a persistent table (#132).
+  defp actor_labels_from_db(col) when is_binary(col), do: actor_labels_from_db([col])
+
   defp actor_labels_from_db(columns) when is_list(columns) do
     unions =
       columns
@@ -862,5 +864,4 @@ defmodule SertantaiComplianceWeb.ScreeningController do
   end
 
   defp actor_labels_from_db(col1, col2), do: actor_labels_from_db([col1, col2])
-  defp actor_labels_from_db(col), do: actor_labels_from_db([col])
 end

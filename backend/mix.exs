@@ -47,6 +47,9 @@ defmodule SertantaiCompliance.MixProject do
       {:bandit, "~> 1.5"},
       {:corsica, "~> 2.1"},
 
+      # Job queue
+      {:oban, "~> 2.18"},
+
       # Ash Framework
       {:ash, "~> 3.0"},
       {:ash_postgres, "~> 2.0"},

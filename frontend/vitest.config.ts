@@ -1,7 +1,14 @@
 import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import path from 'path';
 
 export default defineConfig({
+	resolve: {
+		alias: {
+			$lib: path.resolve(__dirname, './src/lib'),
+			$app: path.resolve(__dirname, './src/test/mocks/app')
+		}
+	},
 	plugins: [svelte({ hot: !process.env.VITEST })],
 	test: {
 		globals: true,

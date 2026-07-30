@@ -1,0 +1,2 @@
+# Moderate: Decimal unbounded exponent DoS — no user-controlled Decimal.new in our code
+GHSA-rhv4-8758-jx7v

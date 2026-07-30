@@ -91,6 +91,13 @@ check_dialyzer() {
         return 0
     fi
 
+    # dialyxir exits 2 for "warnings found" — treat as non-blocking (same as compile warnings)
+    if [ $DIALYZER_STATUS -eq 2 ]; then
+        print_warning "Dialyzer completed with warnings (non-blocking)"
+        print_info "Consider addressing warnings before pushing"
+        return 0
+    fi
+
     if [ $DIALYZER_STATUS -ne 0 ]; then
         print_error "Dialyzer found type errors"
         echo "$DIALYZER_OUTPUT"

@@ -35,10 +35,10 @@ defmodule SertantaiCompliance.MixProject do
     [
       {:usage_rules, "~> 0.1", only: [:dev]},
       {:tidewave, "~> 0.2", only: [:dev]},
-      {:phoenix, "~> 1.7.21"},
+      {:phoenix, "~> 1.7.22"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.10"},
-      {:postgrex, ">= 0.0.0"},
+      {:postgrex, "~> 0.22"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 0.26"},
@@ -51,14 +51,14 @@ defmodule SertantaiCompliance.MixProject do
       {:oban, "~> 2.18"},
 
       # Ash Framework
-      {:ash, "~> 3.0"},
+      {:ash, "~> 3.22"},
       {:ash_postgres, "~> 2.0"},
       {:ash_phoenix, "~> 2.0"},
       {:ash_json_api, "~> 1.0"},
 
       # Auth (JWT/JWKS)
       {:jose, "~> 1.11"},
-      {:req, "~> 0.5"},
+      {:req, "~> 0.6"},
 
       # Dev/Test Tools
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

@@ -7,7 +7,7 @@ defmodule SertantaiComplianceWeb.HelloController do
   """
   def index(conn, _params) do
     json(conn, %{
-      message: "Hello from Sertantai Controls API!",
+      message: "Hello from Sertantai Compliance API!",
       environment: Application.get_env(:sertantai_compliance, :environment, :dev),
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
     })

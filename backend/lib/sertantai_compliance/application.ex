@@ -13,9 +13,7 @@ defmodule SertantaiCompliance.Application do
       {DNSCluster,
        query: Application.get_env(:sertantai_compliance, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SertantaiCompliance.PubSub},
-      # Start a worker by calling: SertantaiCompliance.Worker.start_link(arg)
-      # {SertantaiCompliance.Worker, arg},
-      # Start to serve requests, typically the last entry
+      SertantaiCompliance.Auth.JwksClient,
       SertantaiComplianceWeb.Endpoint
     ]
 

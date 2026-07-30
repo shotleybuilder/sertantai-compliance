@@ -15,8 +15,8 @@ else
     username: "postgres",
     password: "postgres",
     hostname: "localhost",
-    port: 5439,
-    database: "sertantai_compliance_dev",
+    port: 5436,
+    database: "sertantai_legal_dev",
     stacktrace: true,
     show_sensitive_data_on_connection_error: true,
     pool_size: 10
@@ -61,6 +61,10 @@ config :sertantai_compliance, SertantaiComplianceWeb.Endpoint,
 # If desired, both `http:` and `https:` keys can be
 # configured to run both http and https servers on
 # different ports.
+
+# Auth service URL for JWKS
+config :sertantai_compliance,
+  auth_url: "http://localhost:4000"
 
 # Enable dev routes for dashboard and mailbox
 config :sertantai_compliance, dev_routes: true

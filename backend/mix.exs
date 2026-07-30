@@ -53,6 +53,10 @@ defmodule SertantaiCompliance.MixProject do
       {:ash_phoenix, "~> 2.0"},
       {:ash_json_api, "~> 1.0"},
 
+      # Auth (JWT/JWKS)
+      {:jose, "~> 1.11"},
+      {:req, "~> 0.5"},
+
       # Dev/Test Tools
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

@@ -47,3 +47,6 @@ rel/
 
 # Claude Code local settings (user-specific)
 .claude/settings.local.json
+
+# Session SQLite index (derived artifact, rebuilt by session_index.py)
+.claude/sessions/sessions.db

@@ -110,6 +110,7 @@ mix ash_postgres.migrate          # Run migrations
 mix ash_postgres.generate_migrations --name <name>  # Generate migration
 mix run priv/repo/seeds.exs       # Seed database
 mix phx.server                    # Start Phoenix server (http://localhost:4004)
+                                  # Tidewave MCP: http://localhost:4004/tidewave/mcp
 mix test                          # Run tests
 mix credo                         # Static analysis
 mix dialyzer                      # Type checking
@@ -135,11 +136,10 @@ npm run format                    # Format with Prettier
 npm run format:check              # Check formatting
 ```
 
-**Docker** (from root - local development only):
+**Docker** — compliance does NOT have its own PostgreSQL. Use legal's:
 ```bash
-docker-compose -f docker-compose.dev.yml up -d postgres  # Start PostgreSQL only
-docker-compose -f docker-compose.dev.yml stop            # Stop without removing (PRESERVES DATA)
-docker-compose -f docker-compose.dev.yml logs -f         # View logs
+cd ~/Desktop/sertantai-legal
+docker-compose -f docker-compose.dev.yml up -d postgres  # Start shared DB (port 5436)
 ```
 
 ### Port Allocation
@@ -180,15 +180,6 @@ docker-compose -f docker-compose.dev.yml up -d postgres
 # Start compliance backend (no docker needed)
 cd ~/Desktop/sertantai-compliance/backend
 mix phx.server  # http://localhost:4004
-```
-
-### Environment Variable Warning
-
-A stale `DATABASE_URL` environment variable may exist from other projects. Always unset it when running local commands:
-
-```bash
-unset DATABASE_URL
-mix phx.server
 ```
 
 ## Project Structure

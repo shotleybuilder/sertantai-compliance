@@ -1,26 +1,15 @@
 import Config
 
-# Configure your database
-# Use DATABASE_URL if available (for Docker), otherwise use individual settings
-database_url = System.get_env("DATABASE_URL")
-
-if database_url do
-  config :sertantai_compliance, SertantaiCompliance.Repo,
-    url: database_url,
-    stacktrace: true,
-    show_sensitive_data_on_connection_error: true,
-    pool_size: 10
-else
-  config :sertantai_compliance, SertantaiCompliance.Repo,
-    username: "postgres",
-    password: "postgres",
-    hostname: "localhost",
-    port: 5436,
-    database: "sertantai_legal_dev",
-    stacktrace: true,
-    show_sensitive_data_on_connection_error: true,
-    pool_size: 10
-end
+# Shared database with sertantai-legal (port 5436)
+config :sertantai_compliance, SertantaiCompliance.Repo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  port: 5436,
+  database: "sertantai_legal_dev",
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
@@ -64,7 +53,9 @@ config :sertantai_compliance, SertantaiComplianceWeb.Endpoint,
 
 # Auth service URL for JWKS
 config :sertantai_compliance,
-  auth_url: "http://localhost:4000"
+  auth_url: "http://localhost:4000",
+  electric_url: "http://localhost:3003",
+  electric_secret: nil
 
 # Enable dev routes for dashboard and mailbox
 config :sertantai_compliance, dev_routes: true

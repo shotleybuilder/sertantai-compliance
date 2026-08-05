@@ -21,7 +21,7 @@ defmodule SertantaiCompliance.Sync.Organization do
   end
 
   attributes do
-    uuid_primary_key :id, writable?: true
+    uuid_primary_key(:id, writable?: true)
 
     attribute :name, :string do
       allow_nil?(false)

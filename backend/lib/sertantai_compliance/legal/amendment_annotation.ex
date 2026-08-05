@@ -14,6 +14,7 @@ defmodule SertantaiCompliance.Legal.AmendmentAnnotation do
   postgres do
     table("amendment_annotations")
     repo(SertantaiCompliance.Repo)
+    migrate?(false)
   end
 
   attributes do

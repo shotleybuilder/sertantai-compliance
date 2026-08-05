@@ -14,6 +14,7 @@ defmodule SertantaiCompliance.Legal.LegalRegister do
   postgres do
     table("legal_register")
     repo(SertantaiCompliance.Repo)
+    migrate?(false)
   end
 
   attributes do

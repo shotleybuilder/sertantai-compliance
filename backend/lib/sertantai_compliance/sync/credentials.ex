@@ -34,7 +34,9 @@ defmodule SertantaiCompliance.Sync.Credentials do
 
   defp encryption_key do
     secret =
-      Application.get_env(:sertantai_compliance, SertantaiComplianceWeb.Endpoint)[:secret_key_base] ||
+      Application.get_env(:sertantai_compliance, SertantaiComplianceWeb.Endpoint)[
+        :secret_key_base
+      ] ||
         System.get_env("SECRET_KEY_BASE") ||
         raise "SECRET_KEY_BASE not configured"
 

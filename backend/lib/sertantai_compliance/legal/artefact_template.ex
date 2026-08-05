@@ -14,6 +14,7 @@ defmodule SertantaiCompliance.Legal.ArtefactTemplate do
   postgres do
     table("artefact_templates")
     repo(SertantaiCompliance.Repo)
+    migrate?(false)
   end
 
   attributes do

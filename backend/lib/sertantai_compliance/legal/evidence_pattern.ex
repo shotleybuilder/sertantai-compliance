@@ -14,6 +14,7 @@ defmodule SertantaiCompliance.Legal.EvidencePattern do
   postgres do
     table("evidence_patterns")
     repo(SertantaiCompliance.Repo)
+    migrate?(false)
   end
 
   attributes do

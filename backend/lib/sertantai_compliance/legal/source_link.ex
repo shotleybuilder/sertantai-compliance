@@ -13,6 +13,7 @@ defmodule SertantaiCompliance.Legal.SourceLink do
   postgres do
     table("source_links")
     repo(SertantaiCompliance.Repo)
+    migrate?(false)
   end
 
   attributes do

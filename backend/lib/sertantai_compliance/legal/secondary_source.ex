@@ -13,6 +13,7 @@ defmodule SertantaiCompliance.Legal.SecondarySource do
   postgres do
     table("secondary_sources")
     repo(SertantaiCompliance.Repo)
+    migrate?(false)
   end
 
   attributes do

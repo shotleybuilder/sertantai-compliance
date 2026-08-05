@@ -13,6 +13,7 @@ defmodule SertantaiCompliance.Legal.ControlMapping do
   postgres do
     table("control_mappings")
     repo(SertantaiCompliance.Repo)
+    migrate?(false)
   end
 
   attributes do

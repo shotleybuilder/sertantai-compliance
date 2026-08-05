@@ -1,7 +1,7 @@
 ################################################################################
 # Builder Stage
 ################################################################################
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -9,7 +9,9 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including devDependencies for build)
-RUN npm ci
+# Using npm install instead of npm ci for cross-npm-version lockfile compatibility
+# --legacy-peer-deps needed for gridlite adapter peer dependency mismatch
+RUN npm install --legacy-peer-deps
 
 # Copy application code
 COPY . .
@@ -20,7 +22,7 @@ RUN npm run build
 ################################################################################
 # Runner Stage
 ################################################################################
-FROM node:20-alpine
+FROM node:22-alpine
 
 # Install production dependencies for serving
 RUN npm install -g serve@14
@@ -30,12 +32,10 @@ WORKDIR /app
 # Copy built assets from builder
 COPY --from=builder /app/build ./build
 
-# Create non-root user
-RUN addgroup -g 1000 starter && \
-    adduser -D -u 1000 -G starter starter && \
-    chown -R starter:starter /app
+# Use existing non-root 'node' user (UID/GID 1000 in node:alpine images)
+RUN chown -R node:node /app
 
-USER starter
+USER node
 
 EXPOSE 3000
 

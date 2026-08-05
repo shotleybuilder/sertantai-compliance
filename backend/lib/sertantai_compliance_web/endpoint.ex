@@ -50,12 +50,14 @@ defmodule SertantaiComplianceWeb.Endpoint do
   plug Plug.Head
   plug Plug.Session, @session_options
 
-  # CORS configuration
+  # CORS configuration — use string origins only (regexes contain NIF
+  # references that fail compile-time escaping in MIX_ENV=prod)
   plug Corsica,
     origins: [
-      # Vite dev server
-      ~r{^https?://localhost:5173$},
-      ~r{^https?://127\.0\.0\.1:5173$},
+      "http://localhost:5176",
+      "http://localhost:5173",
+      "http://127.0.0.1:5176",
+      "http://127.0.0.1:5173",
       System.get_env("FRONTEND_URL") || ""
     ],
     allow_credentials: true,

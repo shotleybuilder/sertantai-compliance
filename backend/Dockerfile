@@ -9,6 +9,10 @@ RUN apk add --no-cache \
     git \
     postgresql-client
 
+# picosat_elixir includes <sys/unistd.h> which doesn't exist in musl/Alpine
+RUN mkdir -p /usr/include/sys && \
+    echo '#include <unistd.h>' > /usr/include/sys/unistd.h
+
 WORKDIR /app
 
 # Install hex and rebar
@@ -37,7 +41,7 @@ RUN mix release
 ################################################################################
 # Runner Stage
 ################################################################################
-FROM alpine:3.19
+FROM alpine:3.23
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -59,17 +63,17 @@ WORKDIR /app
 COPY --from=builder /app/_build/prod/rel/sertantai_compliance ./
 
 # Create non-root user
-RUN addgroup -g 1000 starter && \
-    adduser -D -u 1000 -G starter starter && \
-    chown -R starter:starter /app
+RUN addgroup -g 1000 sertantai && \
+    adduser -D -u 1000 -G sertantai sertantai && \
+    chown -R sertantai:sertantai /app
 
-USER starter
+USER sertantai
 
-EXPOSE 4000
+EXPOSE 4004
 
 # Health check using the dedicated endpoint
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:4004/health || exit 1
 
 # Start script: run migrations then start server
 CMD ["/bin/bash", "-c", "/app/bin/sertantai_compliance eval 'SertantaiCompliance.Release.migrate()' && /app/bin/sertantai_compliance start"]

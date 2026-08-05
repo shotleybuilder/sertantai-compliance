@@ -66,6 +66,19 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  # ElectricSQL sync service
+  config :sertantai_compliance,
+    electric_url: System.get_env("ELECTRIC_URL"),
+    electric_secret: System.get_env("ELECTRIC_SECRET")
+
+  # Auth service (JWKS endpoint for JWT validation)
+  config :sertantai_compliance,
+    auth_url: System.get_env("AUTH_URL") || "http://sertantai-auth:4001"
+
+  # Frontend URL (for CORS)
+  config :sertantai_compliance,
+    frontend_url: System.get_env("FRONTEND_URL") || "https://#{host}"
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

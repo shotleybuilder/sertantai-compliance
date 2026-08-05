@@ -1,35 +1,94 @@
-# Sertantai-Compliance: AI-Augmented Compliance Assessment Service
+# Sertantai-Compliance: Customer-Facing Compliance Service
 
-**Service Type**: Domain microservice in the SertantAI ecosystem
-**Domain**: AI-augmented compliance assessment workflows
-**Coordinates With**: sertantai-legal (legal data source), sertantai-auth (authentication), sertantai-hub (orchestration)
+**Service Type**: Production SaaS microservice in the SertantAI ecosystem
+**Domain**: Applicability screening, Baserow sync, change management, compliance workbench
+**Coordinates With**: sertantai-legal (admin data source, shared DB), sertantai-auth (authentication), sertantai-hub (orchestration)
 **Infrastructure**: Shared PostgreSQL via ~/Desktop/infrastructure (production)
 
 ## Architecture Context
 
 ```
-                    SertantAI Hub (Orchestrator)
-                             ↓
-        ┌────────────────────┼────────────────────┬──────────────┐
-        ↓                    ↓                    ↓              ↓
-   sertantai-auth    sertantai-legal     sertantai-         sertantai-
-   (Identity)        (UK Legal Data)     compliance          controls
-                           ↑             (THIS SERVICE)
-                           │              AI Assessments
-                      read-only API
+                    SertantAI Hub (Orchestrator, auth entry point)
+                                    ↓
+           ┌────────────────────────┼────────────────────────┐
+           ↓                        ↓                        ↓
+    sertantai-auth           sertantai-compliance      sertantai-legal
+    (Identity/JWT)           (THIS SERVICE)            (ADMIN — local only)
+                             Production SaaS:          Scraper, LAT parser,
+                             Screening, Sync,          Graph, Enrichment,
+                             Change Mgmt, Browse       Analytics, QA
 ```
 
 **This service provides**:
-- Multi-stage AI-augmented compliance assessments (screening → matching → gap analysis → closure)
-- Durable Sessions for persistent, resumable assessment workflows
-- BYOK (Bring Your Own Key) API key management for AI providers
-- Management control tracking and gap analysis
-- Compliance action item generation and tracking
+- Applicability screening against UK/AU legal register
+- Baserow sync engine with 27 compliance templates
+- Change management (law status changes, new laws, repeals)
+- Public law browse page
+- Sync configuration management
+- AI assessments (future)
 
 **This service does NOT provide**:
-- UK Legal/Regulatory data (comes from sertantai-legal)
+- Legal data enrichment (scraping, LAT parsing, graph inference — that's sertantai-legal)
 - User authentication (comes from sertantai-auth)
 - Organization management (comes from hub)
+
+## Database & Migration Strategy
+
+### CRITICAL: Shared Database Pattern
+
+**In development, compliance shares `sertantai_legal_dev` on port 5436.** It does NOT use its own database or its own PostgreSQL container. This is intentional — sertantai-legal (admin) and sertantai-compliance (production) operate on the same database locally.
+
+```
+Dev:  compliance → sertantai_legal_dev (port 5436) ← legal
+Prod: compliance → sertantai_compliance_prod       ← legal pushes via delta sync
+```
+
+### Read-Only Reference Resources
+
+Compliance has 10 Ash resources that mirror tables owned by sertantai-legal:
+
+| Resource | Table | Owner |
+|----------|-------|-------|
+| `Legal.LegalRegister` | `legal_register` | legal writes, compliance reads |
+| `Legal.LegalArticle` | `legal_articles` | legal writes, compliance reads |
+| `Legal.AmendmentAnnotation` | `amendment_annotations` | legal writes, compliance reads |
+| `Legal.Control` | `controls` | legal writes, compliance reads |
+| `Legal.ControlMapping` | `control_mappings` | legal writes, compliance reads |
+| `Legal.EvidencePattern` | `evidence_patterns` | legal writes, compliance reads |
+| `Legal.ArtefactTemplate` | `artefact_templates` | legal writes, compliance reads |
+| `Legal.SecondarySource` | `secondary_sources` | legal writes, compliance reads |
+| `Legal.SecondarySourceProvision` | `secondary_source_provisions` | legal writes, compliance reads |
+| `Legal.SourceLink` | `source_links` | legal writes, compliance reads |
+
+**These resources have `defaults [:read]` only — no create/update/destroy actions.**
+
+**DO NOT generate migrations for these resources.** The tables are created and managed by sertantai-legal. Compliance reads them via the shared database connection. Running `mix ash.codegen --check` will report "Pending Code Generation Detected for 23 files" — this is expected and correct. These resources intentionally have no migrations.
+
+### Org-Scoped Resources (Compliance Owns)
+
+These tables are owned by compliance and WILL have migrations (in production):
+
+| Resource | Table | Owner |
+|----------|-------|-------|
+| `Sync.OrgApplicability` | `org_applicabilities` | compliance |
+| `Sync.OrgScreeningProfile` | `org_screening_profiles` | compliance |
+| `Sync.OrgEntitlement` | `org_entitlements` | compliance |
+| `Sync.SyncProfile` | `sync_profiles` | compliance |
+| `Sync.SyncConfiguration` | `sync_configurations` | compliance |
+| `Sync.SyncJob` | `sync_jobs` | compliance |
+| `Sync.SyncRowMapping` | `sync_row_mappings` | compliance |
+| `Sync.OrgSecondaryApplicability` | `org_secondary_applicabilities` | compliance |
+| `Sync.Organization` | `organizations` | compliance |
+| `Sync.ApplicabilityEvent` | `applicability_events` | compliance |
+
+**In dev, these tables already exist** in `sertantai_legal_dev` (created by legal's migrations). In production, compliance will run its own migrations to create them.
+
+### Migration Rules
+
+1. **NEVER generate migrations for read-only reference resources** (the 10 `Legal.*` resources)
+2. **NEVER run `mix ash.setup` or `mix ash_postgres.create`** — the database already exists and is managed by sertantai-legal's docker-compose
+3. **DO run `mix ash_postgres.migrate`** for compliance-owned tables when adding new org-scoped resources
+4. **The `ash.codegen --check` warning about 23 pending files is expected** — suppress or ignore it in pre-commit hooks
 
 ## Git Commit Rules
 
@@ -92,7 +151,7 @@ docker-compose -f docker-compose.dev.yml logs -f         # View logs
 | sertantai-legal | 5436 | sertantai_legal_dev |
 | sertantai-controls | 5437 | sertantai_controls_dev |
 | sertantai-auth | 5438 | sertantai_auth_prod |
-| **sertantai-compliance** | **5439** | **sertantai_compliance_dev** |
+| **sertantai-compliance** | **5436** | **sertantai_legal_dev (shared)** |
 
 | Service | Port |
 |---------|------|
@@ -109,16 +168,18 @@ docker-compose -f docker-compose.dev.yml logs -f         # View logs
 
 ### Database Configuration
 
-**Port**: `5439` (unique to sertantai-compliance)
+**Port**: `5436` — compliance shares `sertantai_legal_dev` with sertantai-legal.
+
+**DO NOT start compliance's own PostgreSQL container.** Use legal's:
 
 ```bash
-# Start PostgreSQL
+# Start legal's PostgreSQL (if not already running)
+cd ~/Desktop/sertantai-legal
 docker-compose -f docker-compose.dev.yml up -d postgres
 
-# Setup database
-cd backend
-unset DATABASE_URL
-mix ash.setup
+# Start compliance backend (no docker needed)
+cd ~/Desktop/sertantai-compliance/backend
+mix phx.server  # http://localhost:4004
 ```
 
 ### Environment Variable Warning

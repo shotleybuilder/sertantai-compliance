@@ -457,6 +457,299 @@ defmodule SertantaiComplianceWeb.ScreeningController do
     json(conn, vocab)
   end
 
+  # ── Fitness evaluation endpoints ─────────────────────────────────
+
+  @doc "POST /api/screening/evaluate — batch evaluate corpus against org profile"
+  def evaluate(conn, params) do
+    alias SertantaiCompliance.Fitness.ApplicabilityEvaluator
+
+    org_id = conn.assigns.organization_id
+    {:ok, org_id_binary} = Ecto.UUID.dump(org_id)
+
+    # Load profile: use request override or org's saved profile
+    profile =
+      case params["profile"] do
+        override when is_map(override) ->
+          ApplicabilityEvaluator.profile_from_screening(atomize_keys(override))
+
+        _ ->
+          case OrgScreeningProfile.by_organization(org_id) do
+            {:ok, saved} -> ApplicabilityEvaluator.profile_from_screening(Map.from_struct(saved))
+            _ -> %{}
+          end
+      end
+
+    # Load all Making, in-force laws with compiled_applicability
+    {:ok, %{rows: law_rows}} =
+      Repo.query(
+        """
+        SELECT name, title_en, family, compiled_applicability,
+               significance_rating, significance_score, geo_extent,
+               duty_holder, power_holder, rights_holder, responsibility_holder,
+               fitness_entities, is_making
+        FROM legal_register
+        WHERE is_making = true
+          AND country = 'uk'
+          AND (live IS NULL OR (live NOT LIKE '%Revoked%' AND live NOT LIKE '%Repealed%' AND live NOT LIKE '%Abolished%'))
+        ORDER BY name
+        """,
+        []
+      )
+
+    laws =
+      Enum.map(law_rows, fn [
+                              name,
+                              title_en,
+                              family,
+                              compiled_app,
+                              sig_rating,
+                              sig_score,
+                              geo_extent,
+                              duty_holder,
+                              power_holder,
+                              rights_holder,
+                              resp_holder,
+                              fitness_entities,
+                              is_making
+                            ] ->
+        %{
+          name: name,
+          title_en: title_en,
+          family: family,
+          compiled_applicability: decode_jsonb(compiled_app),
+          significance_rating: sig_rating,
+          significance_score: sig_score,
+          geo_extent: geo_extent,
+          duty_holder: decode_jsonb(duty_holder),
+          power_holder: decode_jsonb(power_holder),
+          rights_holder: decode_jsonb(rights_holder),
+          responsibility_holder: decode_jsonb(resp_holder),
+          fitness_entities: fitness_entities,
+          is_making: is_making
+        }
+      end)
+
+    # Evaluate all laws
+    evaluated = ApplicabilityEvaluator.evaluate_batch_with_reasons(laws, profile)
+
+    # Load existing applicability decisions for this org
+    {:ok, %{rows: app_rows}} =
+      Repo.query(
+        "SELECT law_name, status FROM org_applicabilities WHERE organization_id = $1",
+        [org_id_binary]
+      )
+
+    status_map = Map.new(app_rows, fn [name, status] -> {name, status} end)
+
+    # Merge evaluation results with law metadata and existing status
+    matches =
+      Enum.map(evaluated, fn result ->
+        law = Enum.find(laws, fn l -> l.name == result.name end)
+
+        %{
+          law_name: result.name,
+          title: law && law.title_en,
+          family: law && law.family,
+          applies: result.applies,
+          confidence: Float.round(result.confidence, 3),
+          match_reasons: result.reasons,
+          unmatched_dimensions: result.unmatched_dimensions,
+          significance_rating: law && law.significance_rating,
+          significance_score: law && law.significance_score,
+          geo_extent: law && law.geo_extent,
+          current_status: Map.get(status_map, result.name, "unreviewed"),
+          actor_summary: build_actor_summary(law)
+        }
+      end)
+
+    # Sort: applies first, then by confidence DESC, significance_score DESC
+    matches =
+      Enum.sort_by(matches, fn m ->
+        {not m.applies, -m.confidence, -(m.significance_score || 0)}
+      end)
+
+    # Compute summary stats
+    total = length(laws)
+    with_trees = Enum.count(laws, fn l -> l.compiled_applicability != nil end)
+    applying = Enum.filter(matches, fn m -> m.applies end)
+
+    high = Enum.count(applying, fn m -> m.confidence >= 0.8 end)
+    medium = Enum.count(applying, fn m -> m.confidence >= 0.5 and m.confidence < 0.8 end)
+    low = Enum.count(applying, fn m -> m.confidence > 0 and m.confidence < 0.5 end)
+
+    # Profile completeness: fraction of corpus dimensions covered
+    all_dims = ["personal", "material", "territorial", "conditional", "temporal"]
+    covered = Enum.count(all_dims, fn d -> Map.get(profile, d, []) != [] end)
+    completeness = Float.round(covered / length(all_dims), 2)
+
+    json(conn, %{
+      matches: matches,
+      summary: %{
+        total_making_laws: total,
+        evaluated: with_trees,
+        not_evaluable: total - with_trees,
+        matches: %{
+          total: length(applying),
+          high_confidence: high,
+          medium_confidence: medium,
+          low_confidence: low
+        },
+        profile_completeness: completeness,
+        profile_dimensions: Map.keys(profile)
+      }
+    })
+  end
+
+  @doc "GET /api/screening/questions — conditional questions extracted from corpus"
+  def questions(conn, _params) do
+    # Scan compiled_applicability trees for conditional Match nodes
+    {:ok, %{rows: rows}} =
+      Repo.query(
+        """
+        SELECT name, compiled_applicability
+        FROM legal_register
+        WHERE compiled_applicability IS NOT NULL
+          AND is_making = true
+          AND country = 'uk'
+          AND (live IS NULL OR (live NOT LIKE '%Revoked%' AND live NOT LIKE '%Repealed%' AND live NOT LIKE '%Abolished%'))
+        """,
+        []
+      )
+
+    # Extract conditional codes from all trees
+    code_laws =
+      Enum.flat_map(rows, fn [name, tree] ->
+        codes = extract_conditional_codes(decode_jsonb(tree))
+        Enum.map(codes, fn code -> {code, name} end)
+      end)
+
+    # Group by code and count laws
+    grouped =
+      Enum.group_by(code_laws, fn {code, _name} -> code end, fn {_code, name} -> name end)
+
+    questions =
+      grouped
+      |> Enum.map(fn {code, law_names} ->
+        %{
+          code: code,
+          text: conditional_question_text(code),
+          dimension: "conditional",
+          laws_affected: length(Enum.uniq(law_names)),
+          source_law_example: List.first(Enum.uniq(law_names))
+        }
+      end)
+      |> Enum.sort_by(fn q -> -q.laws_affected end)
+
+    json(conn, %{questions: questions})
+  end
+
+  defp build_actor_summary(nil), do: %{}
+
+  defp build_actor_summary(law) do
+    extract = fn holder_json ->
+      case holder_json do
+        %{"values" => values} when is_list(values) -> values
+        _ -> []
+      end
+    end
+
+    %{
+      duties: extract.(law.duty_holder),
+      rights: extract.(law.rights_holder),
+      responsibilities: extract.(law.responsibility_holder),
+      powers: extract.(law.power_holder)
+    }
+  end
+
+  # Profile overrides come in with string keys from JSON.
+  # profile_from_screening handles both atom and string keys,
+  # so we just pass through.
+  defp atomize_keys(map) when is_map(map), do: map
+
+  # Postgrex may return JSONB as a raw string when no custom JSON decoder
+  # is configured. Decode to a map/list if needed.
+  defp decode_jsonb(nil), do: nil
+  defp decode_jsonb(val) when is_map(val) or is_list(val), do: val
+
+  defp decode_jsonb(val) when is_binary(val) do
+    case Jason.decode(val) do
+      {:ok, parsed} -> parsed
+      {:error, _} -> val
+    end
+  end
+
+  defp decode_jsonb(val), do: val
+
+  # ── Conditional code extraction ────────────────────────────────
+
+  defp extract_conditional_codes(%{
+         "op" => "Match",
+         "dimension" => "conditional",
+         "codes" => codes
+       }) do
+    codes
+  end
+
+  defp extract_conditional_codes(%{"op" => op, "children" => children})
+       when op in ["And", "Or"] do
+    Enum.flat_map(children, &extract_conditional_codes/1)
+  end
+
+  defp extract_conditional_codes(%{"op" => "Not", "child" => child}) do
+    extract_conditional_codes(child)
+  end
+
+  defp extract_conditional_codes(%{
+         "op" => "Conditional",
+         "condition" => cond_node,
+         "then" => then_node
+       }) do
+    extract_conditional_codes(cond_node) ++ extract_conditional_codes(then_node)
+  end
+
+  defp extract_conditional_codes(%{"op" => "TimeWindow"} = node) do
+    case Map.get(node, "inner") do
+      nil -> []
+      inner -> extract_conditional_codes(inner)
+    end
+  end
+
+  defp extract_conditional_codes(_), do: []
+
+  # Maps conditional codes to human-readable question text.
+  # Unknown codes get a template-based fallback.
+  @conditional_questions %{
+    "at_work" => "Does the work take place at a workplace?",
+    "employees_gte_5" => "Do you have 5 or more employees?",
+    "employees_gte_50" => "Do you have 50 or more employees?",
+    "employees_gte_250" => "Do you have 250 or more employees?",
+    "employees_gte_500" => "Do you have 500 or more employees?",
+    "domestic_premises" => "Does the work involve domestic premises?",
+    "new_or_expectant_mothers" => "Do you employ new or expectant mothers?",
+    "young_persons" => "Do you employ young persons (under 18)?",
+    "night_workers" => "Do you have night workers?",
+    "lone_workers" => "Do you have lone workers?",
+    "work_at_height" => "Does the work involve working at height?",
+    "confined_spaces" => "Does the work involve confined spaces?",
+    "display_screen_equipment" => "Do workers use display screen equipment?",
+    "manual_handling" => "Does the work involve manual handling?",
+    "noise_exposure" => "Are workers exposed to noise above action levels?",
+    "vibration_exposure" => "Are workers exposed to hand-arm or whole-body vibration?",
+    "ionising_radiation" => "Does the work involve ionising radiation?",
+    "biological_agents" => "Does the work involve exposure to biological agents?",
+    "carcinogens_mutagens" => "Does the work involve carcinogens or mutagens?",
+    "lead_exposure" => "Does the work involve exposure to lead?",
+    "asbestos_exposure" => "Does the work involve exposure to asbestos?"
+  }
+
+  defp conditional_question_text(code) do
+    Map.get(
+      @conditional_questions,
+      code,
+      "Does \"#{code |> String.replace("_", " ")}\" apply to your organisation?"
+    )
+  end
+
   @doc "POST /api/screening/debug-dump — dev-only: save seed preview JSON to data dir"
   def debug_dump(conn, params) do
     if Mix.env() == :prod do

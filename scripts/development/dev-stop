@@ -1,0 +1,39 @@
+#!/bin/bash
+# Development Server Stopper for sertantai-compliance
+# Stops backend (Phoenix/Ash) and frontend (SvelteKit) servers
+# Only kills compliance processes — leaves sertantai-legal running
+
+set -e
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+PROJECT_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd)"
+
+echo "Stopping sertantai-compliance development servers..."
+
+# Kill Phoenix processes in compliance's backend directory
+BACKEND_PIDS=$(pgrep -af "phx.server" | grep "sertantai-compliance" | awk '{print $1}' || true)
+if [ -n "$BACKEND_PIDS" ]; then
+    echo "Killing Phoenix backend processes..."
+    echo "$BACKEND_PIDS" | xargs kill 2>/dev/null || true
+    # Also kill child beam processes spawned from compliance's backend
+    pkill -f "beam.*sertantai_compliance" 2>/dev/null || true
+    echo "Phoenix processes stopped"
+else
+    echo "No Phoenix backend processes found"
+fi
+
+# Kill Vite/npm processes for compliance's frontend
+FRONTEND_PIDS=$(pgrep -af "vite.*dev" | grep "sertantai-compliance" | awk '{print $1}' || true)
+if [ -n "$FRONTEND_PIDS" ]; then
+    echo "Killing SvelteKit frontend processes..."
+    echo "$FRONTEND_PIDS" | xargs kill 2>/dev/null || true
+    echo "SvelteKit processes stopped"
+else
+    echo "No SvelteKit frontend processes found"
+fi
+
+echo ""
+echo "All sertantai-compliance servers stopped."
+echo ""
+echo "Note: sertantai-legal's PostgreSQL is left running (shared database)."
+echo "To start again: dev-start"

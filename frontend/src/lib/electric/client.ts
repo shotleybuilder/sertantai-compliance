@@ -29,7 +29,7 @@ export function resolveElectricUrl(rawUrl: string, origin?: string): string {
 
 // Electric sync service URL — goes through Phoenix backend proxy (Gatekeeper pattern)
 // Dev: http://localhost:4003/api/electric, Prod: https://legal.sertantai.com/api/electric
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4003';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4004';
 const rawElectricUrl = import.meta.env.VITE_ELECTRIC_URL || `${API_URL}/api/electric`;
 
 export const ELECTRIC_URL = resolveElectricUrl(

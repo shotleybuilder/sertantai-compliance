@@ -17,7 +17,7 @@ summary: >
 |---|---------|--------|------------|------------------|
 | 1 | [Evaluator Enhancement](./01-evaluator-enhancement.md) | **closed** | — | `evaluate_with_reasons/2`, `POST /evaluate`, `GET /questions` |
 | 2 | [Questionnaire Wizard UI](./02-questionnaire-wizard.md) | **closed** | 1 | Guided profile builder, completeness scoring |
-| 3 | [Screener Results UI](./03-screener-results.md) | pending | 1 | Confidence-tier tabs, law cards with match explanations, bulk accept |
+| 3 | [Screener Results UI](./03-screener-results.md) | **closed** | 1 | Confidence-tier tabs, law cards with match explanations, bulk accept |
 | 4 | [Register Access Control](./04-register-access-control.md) | pending | — | `OrgRegisterPermission`, capability enforcement, permission UI |
 | 5 | [Drill-Down & Provision Detail](./05-provision-drilldown.md) | pending | 3 | LAT provision view, expression tree visualisation, actor breakdown |
 | 6 | [Integration & Polish](./06-integration-polish.md) | pending | 2,3,4,5 | Seed preview, re-eval diff, activity feed, sync trigger, E2E tests |

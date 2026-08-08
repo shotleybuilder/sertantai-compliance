@@ -5,8 +5,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { authFetch } from '$lib/api/client';
 
-	const HUB_URL = import.meta.env.VITE_HUB_URL || 'http://localhost:4001';
-	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4003';
+	const HUB_URL = import.meta.env.VITE_HUB_URL || 'http://localhost:5173';
+	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4004';
 
 	const navItems = [
 		{ href: '/app/screening', label: 'Screening' },
@@ -51,7 +51,7 @@
 
 	function signOut() {
 		adminAuth.clear();
-		goto(`${HUB_URL}/sign-out`);
+		goto(`${HUB_URL}/login`);
 	}
 </script>
 
@@ -61,7 +61,7 @@
 			<h1 class="text-xl font-semibold text-gray-900 mb-2">Sign In Required</h1>
 			<p class="text-gray-600 mb-4">Please sign in to access the compliance dashboard.</p>
 			<a
-				href="{HUB_URL}/sign-in?redirect={encodeURIComponent($page.url.href)}"
+				href="{HUB_URL}/login"
 				class="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
 			>
 				Sign In

@@ -1,1301 +1,775 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
-	import { GridLite } from '@shotleybuilder/svelte-gridlite-kit';
-	import '@shotleybuilder/svelte-gridlite-kit/styles';
-	import type { ColumnConfig, GridState } from '@shotleybuilder/svelte-gridlite-kit';
-	import { createTanStackDBAdapter } from '@shotleybuilder/gridlite-adapter-tanstack-db';
-	import { createPGLiteCollection } from '$lib/pglite/collection-bridge';
-	import type { ColumnMetadata } from '@shotleybuilder/svelte-gridlite-kit/types';
-	import { adminAuth } from '$lib/stores/auth';
+	import {
+		evaluate,
+		getProfile,
+		type EvaluationResult,
+		type EvaluationMatch,
+		type ScreeningProfile
+	} from '$lib/api/screening';
 	import { authFetch } from '$lib/api/client';
-	import { startSync, syncStatus } from '$lib/pglite/sync';
-	import { getPglite, type PGLiteWithExtensions } from '$lib/pglite/client';
+	import { adminAuth } from '$lib/stores/auth';
+	import {
+		filterAndSort as _filterAndSort,
+		computeTabCounts as _computeTabCounts,
+		confidenceTier,
+		dimLabel,
+		pct,
+		profileDimensions,
+		TABS,
+		type Tab,
+		type SortKey
+	} from '$lib/views/screener-results';
 
-	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4003';
+	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4004';
 
 	// ── State ───────────────────────────────────────────────────────
 
-	let db: PGLiteWithExtensions | null = null;
-	let ready = false;
+	let result: EvaluationResult | null = null;
+	let profile: ScreeningProfile | null = null;
+	let loading = true;
 	let error: string | null = null;
 
-	// Left panel (available + excluded)
-	let leftAdapter: ReturnType<typeof createTanStackDBAdapter> | null = null;
-	let leftGridRef: GridLite;
-	let leftSelectedNames: Set<string> = new Set();
+	let activeTab: Tab = 'all';
+	let searchQuery = '';
+	let familyFilter: string | null = null;
+	let sortBy: SortKey = 'confidence';
 
-	// Right panel (my register)
-	let rightAdapter: ReturnType<typeof createTanStackDBAdapter> | null = null;
-	let rightGridRef: GridLite;
-	let rightSelectedNames: Set<string> = new Set();
+	let actionInProgress: string | null = null;
+	let showBulkConfirm = false;
+	let expandedCard: string | null = null;
 
-	// Stats
-	let statAvailable = 0;
-	let statRegister = 0;
-	let statExcluded = 0;
-
-	// Seed preview
-	let seedPreview: { name: string; title: string; family: string; score: number }[] | null = null;
-	let seedUncategorized: { name: string; title: string; family: string }[] | null = null;
-	let seedLoading = false;
-	let seedStrong = 0;
-	let seedSingle = 0;
-	let showUncategorized = false;
-
-	// Undo toast
-	let undoToast: { lawName: string; action: string } | null = null;
+	let undoToast: { lawName: string; action: string; previousStatus: string } | null = null;
 	let undoTimer: ReturnType<typeof setTimeout> | null = null;
 
-	// Notes editing
-	let editingNotes: { name: string; value: string } | null = null;
+	// ── Derived ─────────────────────────────────────────────────────
 
-	// ── Queries ─────────────────────────────────────────────────────
+	$: allMatches = result?.matches ?? [];
+	$: applying = allMatches.filter((m) => m.applies);
+	$: families = [...new Set(applying.map((m) => m.family).filter(Boolean))].sort() as string[];
 
-	const SHARED_COLUMNS = `
-		l.id, l.name, l.title_en, l.family, l.family_ii, l.year,
-		l.type_code, l.live, l.is_making,
-		l.duty_holder, l.power_holder, l.rights_holder, l.responsibility_holder,
-		l.fitness_entities, l.fitness_scope_dimensions,
-		l.fitness_mention_count, l.fitness_applies_count, l.fitness_disapplies_count,
-		l.has_fitness,
-		l.si_code, l.function, l.source_url
-	`;
+	$: strongUnaccepted = applying.filter(
+		(m) => m.confidence >= 0.8 && m.current_status !== 'yes'
+	).length;
 
-	const LEFT_QUERY = `
-		SELECT ${SHARED_COLUMNS},
-		       COALESCE(oa.status, 'unreviewed') as app_status,
-		       oa.notes as app_notes
-		FROM laws l
-		LEFT JOIN org_applicabilities oa ON oa.law_name = l.name
-		WHERE l.is_making = true
-		  AND (l.live IS NULL OR l.live NOT LIKE '%Revoked%')
-		  AND (oa.status IS NULL OR oa.status IN ('unreviewed', 'no', 'excluded'))
-	`;
+	$: tabCounts = _computeTabCounts(allMatches, result?.summary.not_evaluable ?? 0);
 
-	const RIGHT_QUERY = `
-		SELECT ${SHARED_COLUMNS},
-		       oa.status as app_status,
-		       oa.notes as app_notes,
-		       oa.reviewed_at,
-		       oa.reviewed_by,
-		       oa.source as app_source
-		FROM laws l
-		INNER JOIN org_applicabilities oa ON oa.law_name = l.name
-		WHERE oa.status = 'yes'
-	`;
+	$: filteredMatches = _filterAndSort(allMatches, activeTab, searchQuery, familyFilter, sortBy);
 
-	// ── Column Metadata ─────────────────────────────────────────────
+	// ── Tabs ────────────────────────────────────────────────────────
 
-	const COLUMN_METADATA: ColumnMetadata[] = [
-		{ name: 'id', dataType: 'text', postgresType: 'uuid', nullable: false, hasDefault: true },
-		{
-			name: 'name',
-			dataType: 'text',
-			postgresType: 'varchar',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'title_en',
-			dataType: 'text',
-			postgresType: 'text',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'family',
-			dataType: 'text',
-			postgresType: 'varchar',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'year',
-			dataType: 'number',
-			postgresType: 'integer',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'type_code',
-			dataType: 'text',
-			postgresType: 'text',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'live',
-			dataType: 'text',
-			postgresType: 'varchar',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'duty_holder',
-			dataType: 'json',
-			postgresType: 'jsonb',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'fitness_entities',
-			dataType: 'text',
-			postgresType: 'text[]',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'app_status',
-			dataType: 'text',
-			postgresType: 'text',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'app_notes',
-			dataType: 'text',
-			postgresType: 'text',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'reviewed_at',
-			dataType: 'date',
-			postgresType: 'timestamptz',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'reviewed_by',
-			dataType: 'text',
-			postgresType: 'text',
-			nullable: true,
-			hasDefault: false
-		},
-		{
-			name: 'app_source',
-			dataType: 'text',
-			postgresType: 'text',
-			nullable: true,
-			hasDefault: false
+	const tabs = TABS;
+
+	// ── Load ────────────────────────────────────────────────────────
+
+	async function loadData() {
+		loading = true;
+		error = null;
+		try {
+			const [evalResult, profileData] = await Promise.all([
+				evaluate(),
+				getProfile().catch(() => null)
+			]);
+			result = evalResult;
+			profile = profileData;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load screening results';
+		} finally {
+			loading = false;
 		}
-	];
+	}
 
-	// ── Persist helpers ─────────────────────────────────────────────
+	// ── Actions ─────────────────────────────────────────────────────
 
 	async function setStatus(lawName: string, status: string) {
-		const user = $adminAuth;
-		if (!user?.org_id || !db) return;
-
-		// 1. Backend upsert
-		const response = await authFetch(
-			`${API_URL}/api/screening/applicabilities/${encodeURIComponent(lawName)}`,
-			{
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ status })
-			}
-		);
-		if (!response.ok) {
-			const err = await response.json().catch(() => ({ error: 'Unknown error' }));
-			alert(`Failed: ${err.error || 'Unknown error'}`);
-			return;
-		}
-
-		// 2. PGLite write-back
-		await db.query(
-			`INSERT INTO org_applicabilities (id, organization_id, law_name, status, source, reviewed_at, reviewed_by, inserted_at, updated_at)
-			 VALUES (gen_random_uuid(), $1, $2, $3, 'manual', NOW(), $4, NOW(), NOW())
-			 ON CONFLICT (organization_id, law_name) DO UPDATE SET
-			   status = $3, reviewed_at = NOW(), reviewed_by = $4, updated_at = NOW()`,
-			[user.org_id, lawName, status, user.email || user.id || null]
-		);
-
-		// 3. Rebuild both panels to reflect the move
-		await rebuildPanels();
-
-		// 4. Show undo toast
-		showUndoToast(
-			lawName,
-			status === 'yes' ? 'Added' : status === 'excluded' ? 'Excluded' : 'Removed'
-		);
-	}
-
-	async function bulkSetStatus(lawNames: string[], status: string) {
-		if (lawNames.length === 0) return;
-		const user = $adminAuth;
-		if (!user?.org_id || !db) return;
-
-		const response = await authFetch(`${API_URL}/api/screening/applicabilities/bulk`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ law_names: lawNames, status })
-		});
-		if (!response.ok) {
-			alert('Bulk update failed');
-			return;
-		}
-
-		for (const name of lawNames) {
-			await db.query(
-				`INSERT INTO org_applicabilities (id, organization_id, law_name, status, source, reviewed_at, reviewed_by, inserted_at, updated_at)
-				 VALUES (gen_random_uuid(), $1, $2, $3, 'manual', NOW(), $4, NOW(), NOW())
-				 ON CONFLICT (organization_id, law_name) DO UPDATE SET
-				   status = $3, reviewed_at = NOW(), reviewed_by = $4, updated_at = NOW()`,
-				[user.org_id, name, status, user.email || user.id || null]
+		actionInProgress = lawName;
+		try {
+			const response = await authFetch(
+				`${API_URL}/api/screening/applicabilities/${encodeURIComponent(lawName)}`,
+				{
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ status })
+				}
 			);
+			if (!response.ok) {
+				const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+				alert(`Failed: ${err.error || 'Unknown error'}`);
+				return;
+			}
+			if (result) {
+				const match = result.matches.find((m) => m.law_name === lawName);
+				if (match) {
+					const previousStatus = match.current_status;
+					match.current_status = status;
+					result = { ...result, matches: [...result.matches] };
+					showUndoToast(lawName, status === 'yes' ? 'Added' : 'Excluded', previousStatus);
+				}
+			}
+		} finally {
+			actionInProgress = null;
 		}
-
-		leftSelectedNames = new Set();
-		rightSelectedNames = new Set();
-		await rebuildPanels();
 	}
 
-	async function saveNotes(lawName: string, notes: string) {
-		const user = $adminAuth;
-		if (!user?.org_id || !db) return;
-
-		await authFetch(`${API_URL}/api/screening/applicabilities/${encodeURIComponent(lawName)}`, {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ notes })
-		});
-
-		await db.query(
-			`UPDATE org_applicabilities SET notes = $1, updated_at = NOW()
-			 WHERE law_name = $2`,
-			[notes, lawName]
+	async function bulkAcceptStrong() {
+		if (!result) return;
+		const targets = result.matches.filter(
+			(m) => m.applies && m.confidence >= 0.8 && m.current_status !== 'yes'
 		);
+		if (targets.length === 0) {
+			showBulkConfirm = false;
+			return;
+		}
 
-		editingNotes = null;
+		const lawNames = targets.map((m) => m.law_name);
+		actionInProgress = 'bulk';
+
+		try {
+			const response = await authFetch(`${API_URL}/api/screening/applicabilities/bulk`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					law_names: lawNames,
+					status: 'yes',
+					source: 'screener',
+					metadata: {
+						match_reasons: Object.fromEntries(
+							targets.map((m) => [m.law_name, { confidence: m.confidence, family: m.family }])
+						)
+					}
+				})
+			});
+			if (!response.ok) {
+				alert('Bulk accept failed');
+				return;
+			}
+			for (const name of lawNames) {
+				const match = result.matches.find((m) => m.law_name === name);
+				if (match) match.current_status = 'yes';
+			}
+			result = { ...result, matches: [...result.matches] };
+		} finally {
+			actionInProgress = null;
+			showBulkConfirm = false;
+		}
 	}
 
 	// ── Undo ────────────────────────────────────────────────────────
 
-	function showUndoToast(lawName: string, action: string) {
+	function showUndoToast(lawName: string, action: string, previousStatus: string) {
 		if (undoTimer) clearTimeout(undoTimer);
-		undoToast = { lawName, action };
+		undoToast = { lawName, action, previousStatus };
 		undoTimer = setTimeout(() => {
 			undoToast = null;
-			undoTimer = null;
 		}, 5000);
 	}
 
-	async function handleUndo() {
+	async function undo() {
 		if (!undoToast) return;
+		const prev = undoToast.previousStatus;
+		const name = undoToast.lawName;
+		if (undoTimer) clearTimeout(undoTimer);
 		undoToast = null;
-		if (undoTimer) {
-			clearTimeout(undoTimer);
-			undoTimer = null;
-		}
-
-		try {
-			const response = await authFetch(`${API_URL}/api/screening/undo`, {
-				method: 'POST'
-			});
-			if (!response.ok) {
-				const err = await response.json().catch(() => ({ error: 'Unknown' }));
-				console.warn('Undo failed:', err.error);
-				return;
-			}
-
-			const result = await response.json();
-
-			// Write-back to PGLite
-			const user = $adminAuth;
-			if (db && user?.org_id) {
-				if (result.restored_to === 'unreviewed') {
-					await db.query('DELETE FROM org_applicabilities WHERE law_name = $1', [result.law_name]);
-				} else {
-					await db.query(
-						`INSERT INTO org_applicabilities (id, organization_id, law_name, status, source, reviewed_at, reviewed_by, inserted_at, updated_at)
-						 VALUES (gen_random_uuid(), $1, $2, $3, 'manual', NOW(), $4, NOW(), NOW())
-						 ON CONFLICT (organization_id, law_name) DO UPDATE SET
-						   status = $3, reviewed_at = NOW(), reviewed_by = $4, updated_at = NOW()`,
-						[user.org_id, result.law_name, result.restored_to, user.email || user.id || null]
-					);
-				}
-			}
-
-			await rebuildPanels();
-		} catch (err) {
-			console.error('Undo error:', err);
-		}
+		await setStatus(name, prev === 'unreviewed' ? 'unreviewed' : prev);
 	}
 
-	// ── Seed preview ────────────────────────────────────────────────
+	// ── Helpers ─────────────────────────────────────────────────────
+	// Core helpers (confidenceTier, dimLabel, pct, profileDimensions) imported from $lib/views/screener-results
 
-	async function runSeedPreview() {
-		if (!db || $syncStatus.syncing) return;
-		seedLoading = true;
-		seedPreview = null;
-
-		try {
-			// Load profile from backend
-			const profileRes = await authFetch(`${API_URL}/api/screening/profile`);
-			if (!profileRes.ok) {
-				alert('No profile configured. Go to Profile to set up your organisation.');
-				seedLoading = false;
-				return;
-			}
-			const profile = await profileRes.json();
-
-			// Load org entitlement (subscribed families)
-			let subscribedFamilies: string[] = [];
-			try {
-				const entRes = await authFetch(`${API_URL}/api/sync/entitlement`);
-				if (entRes.ok) {
-					const ent = await entRes.json();
-					subscribedFamilies = ent.families || [];
-					console.log(`[Seed] Entitlement: ${subscribedFamilies.length} families`);
-				} else {
-					console.warn(`[Seed] Entitlement fetch failed: ${entRes.status}`);
-				}
-			} catch (err) {
-				console.warn('[Seed] Entitlement fetch error:', err);
-			}
-
-			// Check profile has at least one tag
-			const allTags = [
-				...(profile.regions || []),
-				...(profile.activities || []),
-				...(profile.locations || []),
-				...(profile.materials || []),
-				...(profile.processes || []),
-				...(profile.sector || [])
-			];
-			if (allTags.length === 0) {
-				alert('Profile is empty. Go to Profile and select some tags first.');
-				seedLoading = false;
-				return;
-			}
-
-			// Build scored matching query in PGLite
-			// Stage 0: family subscription filter
-			// Stage 1: geo filter via geo_region overlap
-			// Stage 2: DRRP actors + fitness intersection with match_score
-			const regions = profile.regions || [];
-			const governedActors = profile.governed_actors || [];
-			const governmentActors = profile.government_actors || [];
-
-			// Combine all profile terms for fitness_entities overlap
-			const profileEntities = [
-				...regions,
-				...(profile.locations || []),
-				...(profile.materials || []),
-				...(profile.processes || []),
-				...(profile.sector || [])
-			];
-
-			// Family filter: use entitlement families if available
-			const familyFilter = subscribedFamilies.length > 0 ? `AND l.family = ANY($4)` : '';
-
-			const params: unknown[] = [
-				governedActors, // $1
-				governmentActors, // $2
-				profileEntities // $3
-			];
-			if (subscribedFamilies.length > 0) params.push(subscribedFamilies); // $4
-
-			// Match governed actors against duty_holder JSONB, government actors against responsibility_holder
-			// fitness_entities: v0.3 reconciled entities matched against all profile terms
-			const result = await db.query<{
-				name: string;
-				title_en: string;
-				family: string;
-				match_score: string;
-			}>(
-				`SELECT l.name, l.title_en, COALESCE(l.family, '') as family,
-				        (CASE WHEN $1::text[] != '{}' AND l.duty_holder IS NOT NULL AND EXISTS (
-				           SELECT 1 FROM jsonb_array_elements_text(l.duty_holder->'values') v WHERE v = ANY($1)
-				         ) THEN 1 ELSE 0 END +
-				         CASE WHEN $2::text[] != '{}' AND l.responsibility_holder IS NOT NULL AND EXISTS (
-				           SELECT 1 FROM jsonb_array_elements_text(l.responsibility_holder->'values') v WHERE v = ANY($2)
-				         ) THEN 1 ELSE 0 END +
-				         CASE WHEN $3::text[] != '{}' AND l.fitness_entities IS NOT NULL AND l.fitness_entities && $3 THEN 1 ELSE 0 END
-				        )::text as match_score
-				 FROM laws l
-				 LEFT JOIN org_applicabilities oa ON oa.law_name = l.name
-				 WHERE l.is_making = true
-				   AND (l.live IS NULL OR l.live NOT LIKE '%Revoked%')
-				   AND (oa.status IS NULL OR oa.status NOT IN ('yes'))
-				   ${familyFilter}
-				   AND (CASE WHEN $1::text[] != '{}' AND l.duty_holder IS NOT NULL AND EXISTS (
-				          SELECT 1 FROM jsonb_array_elements_text(l.duty_holder->'values') v WHERE v = ANY($1)
-				        ) THEN 1 ELSE 0 END +
-				        CASE WHEN $2::text[] != '{}' AND l.responsibility_holder IS NOT NULL AND EXISTS (
-				          SELECT 1 FROM jsonb_array_elements_text(l.responsibility_holder->'values') v WHERE v = ANY($2)
-				        ) THEN 1 ELSE 0 END +
-				        CASE WHEN $3::text[] != '{}' AND l.fitness_entities IS NOT NULL AND l.fitness_entities && $3 THEN 1 ELSE 0 END
-				       ) > 0
-				 ORDER BY match_score DESC, l.family, l.name`,
-				params
-			);
-
-			seedPreview = result.rows.map((r) => ({
-				name: r.name,
-				title: r.title_en || '',
-				family: r.family,
-				score: parseInt(r.match_score)
-			}));
-
-			seedStrong = seedPreview.filter((r) => r.score >= 2).length;
-			seedSingle = seedPreview.filter((r) => r.score === 1).length;
-
-			// Dev: dump preview to console + downloadable JSON
-			if (browser) {
-				const dump = {
-					profile,
-					subscribed_families: subscribedFamilies,
-					timestamp: new Date().toISOString(),
-					fitness_matched: seedPreview,
-					strong: seedStrong,
-					single: seedSingle,
-					uncategorized_count: seedUncategorized?.length ?? 0
-				};
-				console.log('[Seed Preview]', dump);
-				// Save to backend data dir via API (dev only)
-				try {
-					await authFetch(`${API_URL}/api/screening/debug-dump`, {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify(dump)
-					});
-				} catch {
-					// Non-critical — debug endpoint may not exist
-				}
-			}
-
-			// Stage 3: Uncategorized — laws with NO fitness data but matching geo + family subscription
-			const uncatFamilyFilter = subscribedFamilies.length > 0 ? `AND l.family = ANY($2)` : '';
-			const uncatParams = subscribedFamilies.length > 0 ? [regions, subscribedFamilies] : [regions];
-
-			const uncatResult = await db.query<{
-				name: string;
-				title_en: string;
-				family: string;
-			}>(
-				`SELECT l.name, l.title_en, COALESCE(l.family, '') as family
-				 FROM laws l
-				 LEFT JOIN org_applicabilities oa ON oa.law_name = l.name
-				 WHERE l.is_making = true
-				   AND (l.live IS NULL OR l.live NOT LIKE '%Revoked%')
-				   AND (oa.status IS NULL OR oa.status NOT IN ('yes'))
-				   AND l.family IS NOT NULL AND l.family != ''
-				   AND ($1::text[] = '{}' OR l.geo_region IS NOT NULL AND l.geo_region && $1)
-				   ${uncatFamilyFilter}
-				   AND (l.fitness_entities IS NULL OR l.fitness_entities = '{}')
-				 ORDER BY l.family, l.name`,
-				uncatParams
-			);
-
-			seedUncategorized = uncatResult.rows.map((r) => ({
-				name: r.name,
-				title: r.title_en || '',
-				family: r.family
-			}));
-		} catch (err) {
-			console.error('Seed preview failed:', err);
-			alert(`Seed preview failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-		} finally {
-			seedLoading = false;
-		}
+	function sigBadge(rating: string | null): { bg: string; text: string } {
+		if (rating === 'HIGH') return { bg: 'bg-red-50', text: 'text-red-700' };
+		if (rating === 'MEDIUM') return { bg: 'bg-amber-50', text: 'text-amber-700' };
+		if (rating === 'LOW') return { bg: 'bg-blue-50', text: 'text-blue-700' };
+		return { bg: 'bg-gray-50', text: 'text-gray-500' };
 	}
 
-	async function executeSeed() {
-		if (!seedPreview || seedPreview.length === 0) return;
-		const user = $adminAuth;
-		if (!user?.org_id || !db) return;
-
-		const lawNames = seedPreview.map((r) => r.name);
-
-		// Build match_reason metadata (G5 explainability)
-		const matchReasons: Record<string, { score: number; family: string }> = {};
-		for (const law of seedPreview) {
-			matchReasons[law.name] = { score: law.score, family: law.family };
-		}
-
-		const response = await authFetch(`${API_URL}/api/screening/applicabilities/bulk`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				law_names: lawNames,
-				status: 'yes',
-				source: 'screener',
-				metadata: { match_reasons: matchReasons }
-			})
-		});
-
-		if (!response.ok) {
-			alert('Seed failed');
-			return;
-		}
-
-		// Write-back to PGLite
-		for (const law of seedPreview) {
-			await db.query(
-				`INSERT INTO org_applicabilities (id, organization_id, law_name, status, source, reviewed_at, reviewed_by, inserted_at, updated_at)
-				 VALUES (gen_random_uuid(), $1, $2, 'yes', 'screener', NOW(), 'sertantai', NOW(), NOW())
-				 ON CONFLICT (organization_id, law_name) DO UPDATE SET
-				   status = 'yes', source = 'screener', reviewed_at = NOW(), reviewed_by = 'sertantai', updated_at = NOW()`,
-				[user.org_id, law.name]
-			);
-		}
-
-		seedPreview = null;
-		await rebuildPanels();
+	function toggleCard(name: string) {
+		expandedCard = expandedCard === name ? null : name;
 	}
 
-	function closeSeedPreview() {
-		seedPreview = null;
-		seedUncategorized = null;
-		showUncategorized = false;
-	}
-
-	async function confirmLaw(lawName: string) {
-		// Transfer ownership from SertantAI to user
-		const user = $adminAuth;
-		if (!user?.org_id || !db) return;
-
-		await authFetch(`${API_URL}/api/screening/applicabilities/${encodeURIComponent(lawName)}`, {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ status: 'yes', notes: null })
-		});
-
-		await db.query(
-			`UPDATE org_applicabilities SET source = 'manual', reviewed_by = $1, reviewed_at = NOW(), updated_at = NOW()
-			 WHERE law_name = $2`,
-			[user.email || user.id || null, lawName]
-		);
-
-		await rebuildPanels();
-	}
-
-	// ── Panel builders ──────────────────────────────────────────────
-
-	async function rebuildPanels() {
-		if (!db) return;
-		ready = false;
-
-		// Left panel: available + excluded
-		const leftCollection = createPGLiteCollection({
-			db,
-			query: LEFT_QUERY,
-			id: `screening-left-${Date.now()}`
-		});
-		leftAdapter = createTanStackDBAdapter({ collection: leftCollection, columns: COLUMN_METADATA });
-		await leftAdapter.init();
-
-		// Right panel: my register
-		const rightCollection = createPGLiteCollection({
-			db,
-			query: RIGHT_QUERY,
-			id: `screening-right-${Date.now()}`
-		});
-		rightAdapter = createTanStackDBAdapter({
-			collection: rightCollection,
-			columns: COLUMN_METADATA
-		});
-		await rightAdapter.init();
-
-		await refreshStats();
-		ready = true;
-	}
-
-	async function refreshStats() {
-		if (!db) return;
-		try {
-			const left = await db.query<{ count: string }>(
-				`SELECT COUNT(*)::text as count FROM (${LEFT_QUERY}) sub WHERE app_status != 'excluded'`
-			);
-			statAvailable = parseInt(left.rows[0]?.count ?? '0', 10);
-
-			const right = await db.query<{ count: string }>(
-				`SELECT COUNT(*)::text as count FROM (${RIGHT_QUERY}) sub`
-			);
-			statRegister = parseInt(right.rows[0]?.count ?? '0', 10);
-
-			const excluded = await db.query<{ count: string }>(
-				`SELECT COUNT(*)::text as count FROM (${LEFT_QUERY}) sub WHERE app_status = 'excluded'`
-			);
-			statExcluded = parseInt(excluded.rows[0]?.count ?? '0', 10);
-		} catch {
-			/* ignore */
-		}
-	}
-
-	// ── Helpers ──────────────────────────────────────────────────────
-
-	function groupByFamily(
-		laws: { name: string; title: string; family: string }[]
-	): [string, { name: string; title: string; family: string }[]][] {
-		const map = new Map<string, { name: string; title: string; family: string }[]>();
-		for (const law of laws) {
-			const fam = law.family || 'Unclassified';
-			if (!map.has(fam)) map.set(fam, []);
-			map.get(fam)!.push(law);
-		}
-		return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
-	}
-
-	function str(v: unknown): string {
-		return String(v ?? '');
-	}
-
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '';
-		return new Date(dateStr).toLocaleDateString('en-GB', {
-			day: '2-digit',
-			month: 'short'
-		});
-	}
-
-	function parseJsonValues(v: unknown): string[] {
-		if (!v) return [];
-		if (typeof v === 'string') {
-			try {
-				const parsed = JSON.parse(v);
-				if (parsed?.values) return parsed.values;
-				if (Array.isArray(parsed)) return parsed;
-			} catch {
-				/* not JSON */
-			}
-		}
-		if (typeof v === 'object' && v !== null) {
-			if ('values' in v && Array.isArray((v as Record<string, unknown>).values))
-				return (v as Record<string, unknown[]>).values as string[];
-		}
-		return [];
-	}
-
-	function parseArray(v: unknown): string[] {
-		if (!v) return [];
-		if (Array.isArray(v)) return v;
-		if (typeof v === 'string') {
-			if (v.startsWith('{') && v.endsWith('}')) {
-				return v
-					.slice(1, -1)
-					.split(',')
-					.filter((s) => s.length > 0);
-			}
-			try {
-				return JSON.parse(v);
-			} catch {
-				return [];
-			}
-		}
-		return [];
-	}
-
-	// ── Selection ───────────────────────────────────────────────────
-
-	function toggleLeftSelection(name: string) {
-		if (leftSelectedNames.has(name)) leftSelectedNames.delete(name);
-		else leftSelectedNames.add(name);
-		leftSelectedNames = leftSelectedNames;
-	}
-
-	function toggleRightSelection(name: string) {
-		if (rightSelectedNames.has(name)) rightSelectedNames.delete(name);
-		else rightSelectedNames.add(name);
-		rightSelectedNames = rightSelectedNames;
-	}
-
-	// ── Grid state ──────────────────────────────────────────────────
-	// URL state persistence deferred — blocked on gridlite-kit#34
-
-	function handleLeftStateChange(_state: GridState) {
-		refreshStats();
-	}
-
-	function handleRightStateChange(_state: GridState) {
-		refreshStats();
-	}
-
-	// ── Column definitions ──────────────────────────────────────────
-
-	const leftColumns: ColumnConfig[] = [
-		{ name: 'name', label: 'Law', width: 140, dataType: 'text' },
-		{ name: 'title_en', label: 'Title', width: 250, dataType: 'text' },
-		{ name: 'family', label: 'Family', width: 150, dataType: 'text' },
-		{ name: 'duty_holder', label: 'Duty Holders', width: 150, dataType: 'json' },
-		{ name: 'fitness_entities', label: 'Fitness Entities', width: 150, dataType: 'text' },
-		{ name: 'live', label: 'Status', width: 80, dataType: 'text' },
-		{ name: 'app_status', label: '', width: 50, dataType: 'text' }
-	];
-
-	const rightColumns: ColumnConfig[] = [
-		{ name: 'name', label: 'Law', width: 140, dataType: 'text' },
-		{ name: 'title_en', label: 'Title', width: 250, dataType: 'text' },
-		{ name: 'family', label: 'Family', width: 150, dataType: 'text' },
-		{ name: 'app_source', label: 'Source', width: 90, dataType: 'text' },
-		{ name: 'app_notes', label: 'Notes', width: 160, dataType: 'text' },
-		{ name: 'duty_holder', label: 'Duty Holders', width: 150, dataType: 'json' },
-		{ name: 'reviewed_at', label: 'Added', width: 80, dataType: 'date' }
-	];
-
-	// ── Lifecycle ───────────────────────────────────────────────────
-
-	$: if ($syncStatus.error) {
-		error = $syncStatus.error;
-	}
-	$: isLoading = !$syncStatus.connected && !ready;
-
-	onMount(async () => {
-		if (browser) {
-			await startSync();
-			db = await getPglite();
-			await rebuildPanels();
-		}
-	});
+	onMount(loadData);
 </script>
 
-<svelte:head>
-	<title>Applicability Screening - SertantAI</title>
-</svelte:head>
-
-<div class="flex flex-col h-full">
-	<!-- Stats bar -->
-	{#if ready}
-		<div class="flex items-center gap-6 px-6 py-3 bg-white border-b border-gray-200">
-			<div class="flex items-center gap-2">
-				<span class="text-sm text-gray-500">Available</span>
-				<span class="text-lg font-semibold text-gray-700">{statAvailable}</span>
-			</div>
-			<div class="flex items-center gap-2">
-				<span class="text-sm text-gray-500">My Register</span>
-				<span class="text-lg font-semibold text-emerald-600">{statRegister}</span>
-			</div>
-			<div class="flex items-center gap-2">
-				<span class="text-sm text-gray-500">Excluded</span>
-				<span class="text-lg font-semibold text-gray-400">{statExcluded}</span>
-			</div>
-			<div class="flex-1"></div>
-			<button
-				on:click={runSeedPreview}
-				disabled={seedLoading || $syncStatus.syncing}
-				class="px-4 py-1.5 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50"
-			>
-				{#if seedLoading}
-					Matching...
-				{:else}
-					Seed My Register
-				{/if}
-			</button>
-			<div
-				class="h-2 w-48 bg-gray-200 rounded-full overflow-hidden"
-				title="{statRegister} of {statAvailable + statRegister} screened"
-			>
+<div class="h-full overflow-y-auto">
+	<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+		<!-- ── Loading ──────────────────────────────────────────── -->
+		{#if loading}
+			<div class="flex flex-col items-center justify-center py-24">
 				<div
-					class="h-full bg-emerald-500 rounded-full transition-all duration-300"
-					style="width: {statAvailable + statRegister > 0
-						? (statRegister / (statAvailable + statRegister)) * 100
-						: 0}%"
+					class="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"
 				></div>
+				<p class="mt-4 text-gray-500 text-sm">Evaluating your legal register...</p>
+				<p class="mt-1 text-gray-400 text-xs">Scoring each law against your organisation profile</p>
 			</div>
-		</div>
-	{/if}
 
-	{#if isLoading}
-		<div class="flex-1 flex items-center justify-center">
-			<div class="text-center">
-				<div
-					class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"
-				></div>
-				<p class="mt-4 text-gray-600">Loading screening data...</p>
-			</div>
-		</div>
-	{:else if error}
-		<div class="m-6 px-4 py-8 bg-red-50 border border-red-200 rounded-lg">
-			<p class="text-red-600">{error}</p>
-			<button
-				class="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-				on:click={() => window.location.reload()}>Retry</button
-			>
-		</div>
-	{:else if ready && leftAdapter && rightAdapter}
-		<!-- Two-panel split -->
-		<div class="flex-1 flex overflow-hidden">
-			<!-- LEFT PANEL: Available + Excluded -->
-			<div class="flex-1 flex flex-col border-r border-gray-200 overflow-hidden">
-				<div
-					class="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200"
+			<!-- ── Error ────────────────────────────────────────────── -->
+		{:else if error}
+			<div class="rounded-lg bg-red-50 border border-red-200 p-6 text-center">
+				<h2 class="text-lg font-semibold text-red-800 mb-2">Evaluation Failed</h2>
+				<p class="text-sm text-red-600 mb-4">{error}</p>
+				<button
+					on:click={loadData}
+					class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700"
 				>
-					<h2 class="text-sm font-semibold text-gray-700">
-						Available ({statAvailable})
-						{#if statExcluded > 0}
-							<span class="text-gray-400 font-normal">+ {statExcluded} excluded</span>
-						{/if}
-					</h2>
-					{#if leftSelectedNames.size > 0}
-						<button
-							on:click={() => bulkSetStatus(Array.from(leftSelectedNames), 'yes')}
-							class="px-3 py-1 text-xs font-medium text-white bg-emerald-600 rounded hover:bg-emerald-700"
+					Retry
+				</button>
+			</div>
+
+			<!-- ── Results ──────────────────────────────────────────── -->
+		{:else if result}
+			<!-- Profile Summary Bar -->
+			{#if profile}
+				{@const dims = profileDimensions(profile)}
+				<div
+					class="mb-6 rounded-lg bg-white border border-gray-200 px-4 py-3 flex flex-wrap items-center gap-4"
+				>
+					<div class="flex items-center gap-2 text-sm text-gray-700">
+						<svg
+							class="w-4 h-4 text-gray-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
 						>
-							+ Add {leftSelectedNames.size} to register
-						</button>
-					{/if}
-				</div>
-				<div class="flex-1 overflow-auto">
-					<GridLite
-						bind:this={leftGridRef}
-						adapter={leftAdapter}
-						onStateChange={handleLeftStateChange}
-						config={{
-							id: 'screening-available',
-							columns: leftColumns,
-							defaultSorting: [{ column: 'family', direction: 'asc' }],
-							defaultVisibleColumns: [
-								'name',
-								'title_en',
-								'family',
-								'duty_holder',
-								'fitness_entities',
-								'live',
-								'app_status'
-							],
-							pagination: { pageSize: 50 }
-						}}
-						features={{
-							columnVisibility: true,
-							columnResizing: true,
-							filtering: true,
-							sorting: true,
-							pagination: true,
-							grouping: true,
-							globalSearch: true
-						}}
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+							/>
+						</svg>
+						<span class="font-medium">Profile</span>
+						<span
+							class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium
+							{result.summary.profile_completeness >= 0.8
+								? 'bg-emerald-100 text-emerald-700'
+								: result.summary.profile_completeness >= 0.5
+									? 'bg-amber-100 text-amber-700'
+									: 'bg-red-100 text-red-700'}"
+						>
+							{pct(result.summary.profile_completeness)} complete
+						</span>
+					</div>
+					<div class="flex flex-wrap gap-1.5">
+						{#each dims as dim}
+							<span
+								class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs
+								{dim.filled ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'}"
+							>
+								{#if dim.filled}
+									<svg
+										class="w-3 h-3"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+									</svg>
+								{/if}
+								{dim.label}{#if dim.filled}&nbsp;({dim.count}){/if}
+							</span>
+						{/each}
+					</div>
+					<a
+						href="/app/profile"
+						class="ml-auto text-sm text-emerald-600 hover:text-emerald-700 font-medium"
 					>
-						<svelte:fragment slot="cell" let:value let:row let:column>
-							{#if column === 'name'}
-								{@const rowName = str(row.name)}
-								<div class="flex items-center gap-1.5">
-									<input
-										type="checkbox"
-										checked={leftSelectedNames.has(rowName)}
-										on:change={() => toggleLeftSelection(rowName)}
-										class="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600"
-									/>
-									<span class="font-mono text-xs text-gray-600 truncate">{value}</span>
-								</div>
-							{:else if column === 'title_en'}
-								<span class="text-sm text-gray-900 whitespace-normal leading-snug"
-									>{value || ''}</span
-								>
-							{:else if column === 'app_status'}
-								{@const lawName = str(row.name)}
-								{@const status = str(value)}
-								<div class="flex gap-1">
-									{#if status === 'excluded'}
-										<button
-											on:click={() => setStatus(lawName, 'unreviewed')}
-											class="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-											title="Restore to available"
-										>
-											<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-												><path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4"
-												/></svg
-											>
-										</button>
-									{:else}
-										<button
-											on:click={() => setStatus(lawName, 'yes')}
-											class="p-1 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
-											title="Add to register"
-										>
-											<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-												><path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M12 4v16m8-8H4"
-												/></svg
-											>
-										</button>
-										<button
-											on:click={() => setStatus(lawName, 'excluded')}
-											class="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
-											title="Exclude"
-										>
-											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-												><path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-												/></svg
-											>
-										</button>
-									{/if}
-								</div>
-							{:else if column === 'duty_holder'}
-								{@const holders = parseJsonValues(value)}
-								{#if holders.length > 0}
-									<div class="flex flex-wrap gap-0.5">
-										{#each holders.slice(0, 2) as holder}
-											<span class="px-1 py-0.5 text-xs rounded bg-blue-50 text-blue-700"
-												>{holder}</span
-											>
-										{/each}
-										{#if holders.length > 2}
-											<span class="text-xs text-gray-400">+{holders.length - 2}</span>
-										{/if}
-									</div>
-								{:else}
-									<span class="text-gray-300">-</span>
-								{/if}
-							{:else if column === 'fitness_entities'}
-								{@const items = parseArray(value)}
-								{#if items.length > 0}
-									<div class="flex flex-wrap gap-0.5">
-										{#each items as item}
-											<span class="px-1 py-0.5 text-xs rounded bg-purple-50 text-purple-700"
-												>{item}</span
-											>
-										{/each}
-									</div>
-								{:else}
-									<span class="text-gray-300">-</span>
-								{/if}
-							{:else if column === 'live'}
-								{@const status = str(value)}
+						Edit Profile
+					</a>
+				</div>
+			{/if}
+
+			<!-- Summary Stats -->
+			<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+				<div class="rounded-lg bg-white border border-gray-200 p-4">
+					<div class="text-2xl font-bold text-gray-900">
+						{result.summary.matches.total}
+					</div>
+					<div class="text-sm text-gray-500">Matching Laws</div>
+				</div>
+				<div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
+					<div class="text-2xl font-bold text-emerald-700">
+						{result.summary.matches.high_confidence}
+					</div>
+					<div class="text-sm text-emerald-600">Strong</div>
+				</div>
+				<div class="rounded-lg bg-amber-50 border border-amber-200 p-4">
+					<div class="text-2xl font-bold text-amber-700">
+						{result.summary.matches.medium_confidence}
+					</div>
+					<div class="text-sm text-amber-600">Probable</div>
+				</div>
+				<div class="rounded-lg bg-red-50 border border-red-200 p-4">
+					<div class="text-2xl font-bold text-red-700">
+						{result.summary.matches.low_confidence}
+					</div>
+					<div class="text-sm text-red-600">Possible</div>
+				</div>
+			</div>
+
+			<!-- Bulk Accept Banner -->
+			{#if strongUnaccepted > 0 && activeTab !== 'register' && activeTab !== 'excluded'}
+				<div
+					class="mb-4 flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3"
+				>
+					<div class="text-sm text-emerald-800">
+						<span class="font-medium">{strongUnaccepted}</span> strong match{strongUnaccepted === 1
+							? ''
+							: 'es'} not yet in your register
+					</div>
+					<button
+						on:click={() => (showBulkConfirm = true)}
+						class="px-3 py-1.5 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50"
+						disabled={actionInProgress === 'bulk'}
+					>
+						Accept All Strong
+					</button>
+				</div>
+			{/if}
+
+			<!-- Tabs -->
+			<div class="border-b border-gray-200 mb-4">
+				<nav class="flex -mb-px space-x-1 overflow-x-auto">
+					{#each tabs as tab}
+						{@const count = tabCounts[tab.key]}
+						<button
+							on:click={() => (activeTab = tab.key)}
+							class="whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 transition-colors
+							{activeTab === tab.key
+								? 'border-emerald-500 text-emerald-600'
+								: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+						>
+							{tab.label}
+							{#if count > 0}
 								<span
-									class="text-xs {status.includes('In force')
-										? 'text-green-700'
-										: 'text-amber-700'}">{status ? '✔' : '-'}</span
+									class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 text-xs rounded-full
+									{activeTab === tab.key ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}"
 								>
-							{:else if column === 'family'}
-								<span class="text-xs text-gray-600 whitespace-normal">{value || '-'}</span>
-							{:else}
-								<span class="text-xs">{value ?? '-'}</span>
+									{count}
+								</span>
 							{/if}
-						</svelte:fragment>
-					</GridLite>
-				</div>
+						</button>
+					{/each}
+				</nav>
 			</div>
 
-			<!-- RIGHT PANEL: My Register -->
-			<div class="flex-1 flex flex-col overflow-hidden">
-				<div
-					class="flex items-center justify-between px-4 py-2 bg-emerald-50 border-b border-emerald-200"
-				>
-					<h2 class="text-sm font-semibold text-emerald-800">
-						My Register ({statRegister})
-					</h2>
-					{#if rightSelectedNames.size > 0}
-						<button
-							on:click={() => bulkSetStatus(Array.from(rightSelectedNames), 'unreviewed')}
-							class="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded hover:bg-red-200"
-						>
-							× Remove {rightSelectedNames.size}
-						</button>
-					{/if}
-				</div>
-				<div class="flex-1 overflow-auto">
-					<GridLite
-						bind:this={rightGridRef}
-						adapter={rightAdapter}
-						onStateChange={handleRightStateChange}
-						config={{
-							id: 'screening-register',
-							columns: rightColumns,
-							defaultSorting: [{ column: 'family', direction: 'asc' }],
-							defaultVisibleColumns: [
-								'name',
-								'title_en',
-								'family',
-								'app_source',
-								'app_notes',
-								'duty_holder',
-								'reviewed_at'
-							],
-							pagination: { pageSize: 50 }
-						}}
-						features={{
-							columnVisibility: true,
-							columnResizing: true,
-							filtering: true,
-							sorting: true,
-							pagination: true,
-							grouping: true,
-							globalSearch: true
-						}}
+			<!-- Uncategorised Tab Content -->
+			{#if activeTab === 'uncategorised'}
+				<div class="rounded-lg bg-gray-50 border border-gray-200 p-8 text-center">
+					<svg
+						class="w-10 h-10 text-gray-300 mx-auto mb-3"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
 					>
-						<svelte:fragment slot="cell" let:value let:row let:column>
-							{#if column === 'name'}
-								{@const rowName = str(row.name)}
-								<div class="flex items-center gap-1.5">
-									<input
-										type="checkbox"
-										checked={rightSelectedNames.has(rowName)}
-										on:change={() => toggleRightSelection(rowName)}
-										class="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600"
-									/>
-									<span class="font-mono text-xs text-gray-600 truncate">{value}</span>
-								</div>
-							{:else if column === 'title_en'}
-								<span class="text-sm text-gray-900 whitespace-normal leading-snug"
-									>{value || ''}</span
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"
+						/>
+					</svg>
+					<h3 class="text-lg font-medium text-gray-700 mb-1">
+						{result.summary.not_evaluable} laws could not be evaluated
+					</h3>
+					<p class="text-sm text-gray-500 max-w-md mx-auto">
+						These laws lack fitness data (compiled applicability trees) and cannot be automatically
+						scored. They may need manual review or will be evaluable once enrichment completes.
+					</p>
+					<div class="mt-4 text-xs text-gray-400">
+						{result.summary.evaluated} of {result.summary.total_making_laws} making laws were evaluated
+					</div>
+				</div>
+			{:else}
+				<!-- Search + Filters -->
+				<div class="flex flex-wrap items-center gap-3 mb-4">
+					<div class="relative flex-1 min-w-[200px] max-w-sm">
+						<svg
+							class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+							/>
+						</svg>
+						<input
+							type="text"
+							bind:value={searchQuery}
+							placeholder="Search by name or title..."
+							class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
+						/>
+					</div>
+
+					<select
+						bind:value={familyFilter}
+						class="text-sm border border-gray-300 rounded-md py-2 pl-3 pr-8 focus:ring-emerald-500 focus:border-emerald-500"
+					>
+						<option value={null}>All Families</option>
+						{#each families as fam}
+							<option value={fam}>{fam}</option>
+						{/each}
+					</select>
+
+					<select
+						bind:value={sortBy}
+						class="text-sm border border-gray-300 rounded-md py-2 pl-3 pr-8 focus:ring-emerald-500 focus:border-emerald-500"
+					>
+						<option value="confidence">Sort: Confidence</option>
+						<option value="significance">Sort: Significance</option>
+						<option value="family">Sort: Family</option>
+						<option value="name">Sort: Name</option>
+					</select>
+
+					<div class="text-sm text-gray-400 ml-auto">
+						{filteredMatches.length} law{filteredMatches.length === 1 ? '' : 's'}
+					</div>
+				</div>
+
+				<!-- Law Cards -->
+				{#if filteredMatches.length === 0}
+					<div class="text-center py-12 text-gray-500 text-sm">
+						{#if searchQuery || familyFilter}
+							No laws match your filters.
+							<button
+								on:click={() => {
+									searchQuery = '';
+									familyFilter = null;
+								}}
+								class="text-emerald-600 hover:underline ml-1"
+							>
+								Clear filters
+							</button>
+						{:else if activeTab === 'register'}
+							No laws in your register yet. Review matches and add applicable laws.
+						{:else if activeTab === 'excluded'}
+							No excluded laws.
+						{:else}
+							No matches found in this tier.
+						{/if}
+					</div>
+				{:else}
+					<div class="space-y-3">
+						{#each filteredMatches as match (match.law_name)}
+							{@const tier = confidenceTier(match.confidence)}
+							{@const sig = sigBadge(match.significance_rating)}
+							{@const expanded = expandedCard === match.law_name}
+							{@const isActioning = actionInProgress === match.law_name}
+
+							<div
+								class="rounded-lg bg-white border border-gray-200 hover:border-gray-300 transition-colors"
+							>
+								<!-- Card Header -->
+								<button
+									on:click={() => toggleCard(match.law_name)}
+									class="w-full text-left px-4 py-3 flex items-start gap-3"
 								>
-							{:else if column === 'app_notes'}
-								{@const lawName = str(row.name)}
-								{#if editingNotes?.name === lawName}
-									<input
-										type="text"
-										class="w-full text-xs border border-emerald-400 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-										bind:value={editingNotes.value}
-										on:blur={() => {
-											if (editingNotes) saveNotes(editingNotes.name, editingNotes.value);
-										}}
-										on:keydown={(e) => {
-											if (e.key === 'Enter') {
-												if (editingNotes) saveNotes(editingNotes.name, editingNotes.value);
-											} else if (e.key === 'Escape') {
-												editingNotes = null;
-											}
-										}}
-									/>
-								{:else}
-									<button
-										class="w-full text-left text-xs text-gray-500 hover:bg-gray-100 px-1 py-0.5 rounded truncate"
-										on:dblclick={() => {
-											editingNotes = { name: lawName, value: str(value) };
-										}}
-										title="Double-click to edit"
+									<!-- Confidence indicator -->
+									<div
+										class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold {tier.bg} {tier.text}"
 									>
-										{value || 'Add notes...'}
-									</button>
-								{/if}
-							{:else if column === 'duty_holder'}
-								{@const holders = parseJsonValues(value)}
-								{#if holders.length > 0}
-									<div class="flex flex-wrap gap-0.5">
-										{#each holders.slice(0, 2) as holder}
-											<span class="px-1 py-0.5 text-xs rounded bg-blue-50 text-blue-700"
-												>{holder}</span
-											>
-										{/each}
-										{#if holders.length > 2}
-											<span class="text-xs text-gray-400">+{holders.length - 2}</span>
+										{pct(match.confidence)}
+									</div>
+
+									<!-- Title + meta -->
+									<div class="flex-1 min-w-0">
+										<div class="flex items-center gap-2 flex-wrap">
+											<span class="font-medium text-gray-900 text-sm">
+												{match.law_name}
+											</span>
+											{#if match.family}
+												<span
+													class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700"
+												>
+													{match.family}
+												</span>
+											{/if}
+											{#if match.significance_rating}
+												<span
+													class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium {sig.bg} {sig.text}"
+												>
+													{match.significance_rating}
+												</span>
+											{/if}
+											{#if match.current_status === 'yes'}
+												<span
+													class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700"
+												>
+													In Register
+												</span>
+											{:else if match.current_status === 'excluded'}
+												<span
+													class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-600"
+												>
+													Excluded
+												</span>
+											{/if}
+										</div>
+										{#if match.title}
+											<p class="text-sm text-gray-600 mt-0.5 truncate">
+												{match.title}
+											</p>
+										{/if}
+										<!-- Match reasons summary (collapsed) -->
+										{#if !expanded && match.match_reasons.length > 0}
+											<div class="flex flex-wrap gap-1 mt-1.5">
+												{#each match.match_reasons as reason}
+													<span
+														class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-gray-50 text-gray-600"
+													>
+														<span class="font-medium">{dimLabel(reason.dimension)}</span>
+														<span class="text-gray-400">
+															{reason.matched_codes.slice(0, 2).join(', ')}{reason.matched_codes
+																.length > 2
+																? '...'
+																: ''}
+														</span>
+													</span>
+												{/each}
+											</div>
 										{/if}
 									</div>
-								{:else}
-									<span class="text-gray-300">-</span>
-								{/if}
-							{:else if column === 'app_source'}
-								{@const source = str(value)}
-								{@const lawName = str(row.name)}
-								{#if source === 'screener'}
-									<div class="flex items-center gap-1">
-										<span
-											class="px-1.5 py-0.5 text-xs rounded-full bg-violet-100 text-violet-700 cursor-help"
-											title="Seeded by SertantAI based on your profile. Click ✓ to confirm."
-											>SertantAI</span
-										>
-										<button
-											on:click={() => confirmLaw(lawName)}
-											class="p-0.5 text-violet-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
-											title="Confirm — transfer to your ownership"
-										>
-											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-												><path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M5 13l4 4L19 7"
-												/></svg
-											>
-										</button>
+
+									<!-- Expand icon -->
+									<svg
+										class="w-5 h-5 text-gray-400 flex-shrink-0 transition-transform {expanded
+											? 'rotate-180'
+											: ''}"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+									</svg>
+								</button>
+
+								<!-- Expanded Detail -->
+								{#if expanded}
+									<div class="px-4 pb-4 border-t border-gray-100">
+										<!-- Match Reasons Detail -->
+										{#if match.match_reasons.length > 0}
+											<div class="mt-3">
+												<h4
+													class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2"
+												>
+													Why this law matches
+												</h4>
+												<div class="space-y-2">
+													{#each match.match_reasons as reason}
+														<div class="flex items-start gap-3">
+															<div class="flex-shrink-0 w-20">
+																<span class="text-xs font-medium text-gray-700">
+																	{dimLabel(reason.dimension)}
+																</span>
+															</div>
+															<div class="flex-1">
+																<div class="flex items-center gap-2">
+																	<div
+																		class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"
+																	>
+																		<div
+																			class="h-full rounded-full {reason.node_confidence >= 0.8
+																				? 'bg-emerald-500'
+																				: reason.node_confidence >= 0.5
+																					? 'bg-amber-500'
+																					: 'bg-red-400'}"
+																			style="width: {reason.node_confidence * 100}%"
+																		></div>
+																	</div>
+																	<span class="text-xs text-gray-500 w-8 text-right">
+																		{pct(reason.node_confidence)}
+																	</span>
+																</div>
+																<div class="flex flex-wrap gap-1 mt-1">
+																	{#each reason.matched_codes as code}
+																		<span
+																			class="inline-flex px-1.5 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700"
+																		>
+																			{code}
+																		</span>
+																	{/each}
+																</div>
+															</div>
+														</div>
+													{/each}
+												</div>
+											</div>
+										{/if}
+
+										<!-- Unmatched Dimensions -->
+										{#if match.unmatched_dimensions.length > 0}
+											<div class="mt-3">
+												<h4
+													class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1"
+												>
+													Dimensions not matched
+												</h4>
+												<div class="flex flex-wrap gap-1">
+													{#each match.unmatched_dimensions as dim}
+														<span
+															class="inline-flex px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-500"
+														>
+															{dimLabel(dim)}
+														</span>
+													{/each}
+												</div>
+											</div>
+										{/if}
+
+										<!-- Actor Summary -->
+										{#if match.actor_summary.duties.length > 0 || match.actor_summary.rights.length > 0 || match.actor_summary.responsibilities.length > 0 || match.actor_summary.powers.length > 0}
+											<div class="mt-3">
+												<h4
+													class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1"
+												>
+													Actors
+												</h4>
+												<div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+													{#if match.actor_summary.duties.length > 0}
+														<div>
+															<span class="font-medium text-gray-600">Duties:</span>
+															<span class="text-gray-500"
+																>{match.actor_summary.duties.join(', ')}</span
+															>
+														</div>
+													{/if}
+													{#if match.actor_summary.responsibilities.length > 0}
+														<div>
+															<span class="font-medium text-gray-600">Responsibilities:</span>
+															<span class="text-gray-500"
+																>{match.actor_summary.responsibilities.join(', ')}</span
+															>
+														</div>
+													{/if}
+													{#if match.actor_summary.rights.length > 0}
+														<div>
+															<span class="font-medium text-gray-600">Rights:</span>
+															<span class="text-gray-500"
+																>{match.actor_summary.rights.join(', ')}</span
+															>
+														</div>
+													{/if}
+													{#if match.actor_summary.powers.length > 0}
+														<div>
+															<span class="font-medium text-gray-600">Powers:</span>
+															<span class="text-gray-500"
+																>{match.actor_summary.powers.join(', ')}</span
+															>
+														</div>
+													{/if}
+												</div>
+											</div>
+										{/if}
+
+										<!-- Geo + Significance -->
+										{#if match.geo_extent || match.significance_score != null}
+											<div class="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+												{#if match.geo_extent}
+													<div>
+														<span class="font-medium text-gray-600">Extent:</span>
+														{match.geo_extent}
+													</div>
+												{/if}
+												{#if match.significance_score != null}
+													<div>
+														<span class="font-medium text-gray-600">Significance Score:</span>
+														{match.significance_score}
+													</div>
+												{/if}
+											</div>
+										{/if}
+
+										<!-- Actions -->
+										<div class="mt-4 flex items-center gap-2 pt-3 border-t border-gray-100">
+											{#if match.current_status !== 'yes'}
+												<button
+													on:click|stopPropagation={() => setStatus(match.law_name, 'yes')}
+													disabled={isActioning}
+													class="px-3 py-1.5 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50"
+												>
+													{isActioning ? 'Saving...' : 'Add to Register'}
+												</button>
+											{/if}
+											{#if match.current_status !== 'excluded'}
+												<button
+													on:click|stopPropagation={() => setStatus(match.law_name, 'excluded')}
+													disabled={isActioning}
+													class="px-3 py-1.5 bg-white text-gray-700 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+												>
+													{isActioning ? 'Saving...' : 'Exclude'}
+												</button>
+											{/if}
+											{#if match.current_status === 'yes' || match.current_status === 'excluded'}
+												<button
+													on:click|stopPropagation={() => setStatus(match.law_name, 'unreviewed')}
+													disabled={isActioning}
+													class="px-3 py-1.5 text-gray-500 text-sm font-medium hover:text-gray-700 disabled:opacity-50"
+												>
+													Reset
+												</button>
+											{/if}
+										</div>
 									</div>
-								{:else if source === 'enhesa_import'}
-									<span
-										class="px-1.5 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 cursor-help"
-										title="Imported from Enhesa legacy register">Import</span
-									>
-								{:else}
-									<span
-										class="px-1.5 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-700 cursor-help"
-										title="Confirmed by {str(row.reviewed_by) || 'user'}">Confirmed</span
-									>
 								{/if}
-							{:else if column === 'reviewed_at'}
-								<span class="text-xs text-gray-500">{formatDate(str(value))}</span>
-							{:else if column === 'family'}
-								<span class="text-xs text-gray-600 whitespace-normal">{value || '-'}</span>
-							{:else}
-								<span class="text-xs">{value ?? '-'}</span>
-							{/if}
-						</svelte:fragment>
-					</GridLite>
-				</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			{/if}
+		{/if}
+	</div>
+</div>
+
+<!-- Bulk Accept Confirmation Modal -->
+{#if showBulkConfirm}
+	<div class="fixed inset-0 z-50 flex items-center justify-center">
+		<button
+			class="absolute inset-0 bg-black/50"
+			on:click={() => (showBulkConfirm = false)}
+			tabindex="-1"
+		></button>
+		<div class="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+			<h3 class="text-lg font-semibold text-gray-900 mb-2">Accept Strong Matches</h3>
+			<p class="text-sm text-gray-600 mb-4">
+				This will add <span class="font-medium text-emerald-700">{strongUnaccepted}</span>
+				law{strongUnaccepted === 1 ? '' : 's'} with strong confidence ({'>'}= 80%) to your legal
+				register. Each will be marked as applicable with source "screener".
+			</p>
+			<div class="flex justify-end gap-3">
+				<button
+					on:click={() => (showBulkConfirm = false)}
+					class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+				>
+					Cancel
+				</button>
+				<button
+					on:click={bulkAcceptStrong}
+					disabled={actionInProgress === 'bulk'}
+					class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50"
+				>
+					{actionInProgress === 'bulk' ? 'Adding...' : `Accept ${strongUnaccepted}`}
+				</button>
 			</div>
 		</div>
-	{/if}
-</div>
+	</div>
+{/if}
 
 <!-- Undo Toast -->
 {#if undoToast}
 	<div
-		class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-gray-900 text-white rounded-lg shadow-lg"
+		class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 text-sm"
 	>
-		<span class="text-sm">{undoToast.action}: {undoToast.lawName}</span>
-		<button
-			on:click={handleUndo}
-			class="px-3 py-1 text-sm font-medium bg-white text-gray-900 rounded hover:bg-gray-100"
-		>
+		<span>
+			<span class="font-medium">{undoToast.lawName}</span>
+			{undoToast.action.toLowerCase()}
+		</span>
+		<button on:click={undo} class="font-medium text-emerald-400 hover:text-emerald-300">
 			Undo
 		</button>
-		<button on:click={() => (undoToast = null)} class="text-gray-400 hover:text-white">
-			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-				><path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M6 18L18 6M6 6l12 12"
-				/></svg
-			>
-		</button>
-	</div>
-{/if}
-
-<!-- Seed Preview Modal -->
-{#if seedPreview}
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
-	<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-		<div class="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
-			<div class="px-6 py-4 border-b border-gray-200">
-				<h2 class="text-lg font-semibold text-gray-900">Seed Preview</h2>
-				<p class="text-sm text-gray-500 mt-1">
-					SertantAI found <strong>{seedPreview.length}</strong> laws matching your profile.
-					{#if seedUncategorized && seedUncategorized.length > 0}
-						Plus <strong>{seedUncategorized.length}</strong> uncategorized laws requiring manual review.
-					{/if}
-				</p>
-				<div class="flex gap-4 mt-2">
-					<span class="text-xs">
-						<span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1"></span>
-						Strong match (2+): {seedStrong}
-					</span>
-					<span class="text-xs">
-						<span class="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1"></span>
-						Single match: {seedSingle}
-					</span>
-					{#if seedUncategorized && seedUncategorized.length > 0}
-						<span class="text-xs">
-							<span class="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1"></span>
-							Uncategorized: {seedUncategorized.length}
-						</span>
-					{/if}
-				</div>
-			</div>
-
-			<div class="flex-1 overflow-auto px-6 py-3">
-				<table class="w-full text-sm">
-					<thead class="sticky top-0 bg-white">
-						<tr class="text-left text-xs text-gray-500 border-b">
-							<th class="pb-2 pr-3">Law</th>
-							<th class="pb-2 pr-3">Family</th>
-							<th class="pb-2 text-center">Score</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each seedPreview as law}
-							<tr class="border-b border-gray-100 hover:bg-gray-50">
-								<td class="py-1.5 pr-3">
-									<div class="text-gray-900 text-xs">{law.title || law.name}</div>
-									<div class="text-gray-400 text-xs font-mono">{law.name}</div>
-								</td>
-								<td class="py-1.5 pr-3 text-xs text-gray-600">{law.family || '-'}</td>
-								<td class="py-1.5 text-center">
-									{#if law.score >= 2}
-										<span class="px-1.5 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-700"
-											>{law.score}</span
-										>
-									{:else}
-										<span class="px-1.5 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700"
-											>{law.score}</span
-										>
-									{/if}
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-
-				{#if seedUncategorized && seedUncategorized.length > 0}
-					<div class="mt-4 border-t border-gray-200 pt-3">
-						<button
-							on:click={() => (showUncategorized = !showUncategorized)}
-							class="flex items-center gap-2 text-xs font-medium text-amber-700 hover:text-amber-800"
-						>
-							<svg
-								class="w-3 h-3 transition-transform {showUncategorized ? 'rotate-90' : ''}"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-								><path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M9 5l7 7-7 7"
-								/></svg
-							>
-							Uncategorized — Requires Manual Review ({seedUncategorized.length})
-						</button>
-						<p class="text-xs text-gray-500 mt-1 ml-5">
-							These laws have no fitness data. They are NOT seeded automatically — review them
-							manually in the Available panel.
-						</p>
-
-						{#if showUncategorized}
-							{@const grouped = groupByFamily(seedUncategorized)}
-							<div class="mt-2 ml-5 space-y-2 max-h-48 overflow-auto">
-								{#each grouped as [family, laws]}
-									<div>
-										<div class="text-xs font-medium text-amber-600">
-											{family} ({laws.length})
-										</div>
-										<div class="ml-2 space-y-0.5">
-											{#each laws as law}
-												<div class="text-xs text-gray-600 truncate" title={law.name}>
-													{law.title || law.name}
-												</div>
-											{/each}
-										</div>
-									</div>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				{/if}
-			</div>
-
-			<div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-				<p class="text-xs text-gray-500">
-					Laws will be added with source "SertantAI". You can confirm or remove them later.
-				</p>
-				<div class="flex gap-3">
-					<button
-						on:click={closeSeedPreview}
-						class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
-					>
-						Cancel
-					</button>
-					<button
-						on:click={executeSeed}
-						class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700"
-					>
-						Add {seedPreview.length} laws to register
-					</button>
-				</div>
-			</div>
-		</div>
 	</div>
 {/if}

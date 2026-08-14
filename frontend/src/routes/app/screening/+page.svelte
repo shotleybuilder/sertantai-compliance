@@ -32,6 +32,7 @@
 		type DrrpType
 	} from '$lib/api/provisions';
 	import ExpressionTree from '$lib/components/screening/ExpressionTree.svelte';
+	import TreeSummary from '$lib/components/screening/TreeSummary.svelte';
 
 	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4004';
 
@@ -924,11 +925,18 @@
 													<!-- Applicability Tree tab -->
 												{:else if currentTab === 'tree'}
 													{#if prov.applicability_tree}
-														<div class="max-h-96 overflow-y-auto text-xs" on:click|stopPropagation>
-															<ExpressionTree
-																node={prov.applicability_tree}
+														<div on:click|stopPropagation>
+															<TreeSummary
+																tree={prov.applicability_tree}
 																matchReasons={match.match_reasons}
+																applies={match.applies}
 															/>
+															<div class="max-h-96 overflow-y-auto text-xs">
+																<ExpressionTree
+																	node={prov.applicability_tree}
+																	matchReasons={match.match_reasons}
+																/>
+															</div>
 														</div>
 													{:else}
 														<p class="text-sm text-gray-400">

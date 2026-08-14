@@ -86,6 +86,26 @@ export function sortMatches(matches: EvaluationMatch[], sort: SortKey): Evaluati
 	return sorted;
 }
 
+// ── Status filter ──────────────────────────────────────────────
+
+export type StatusFilter = 'all' | 'unreviewed' | 'yes' | 'excluded';
+
+export function filterByStatus(
+	matches: EvaluationMatch[],
+	status: StatusFilter
+): EvaluationMatch[] {
+	switch (status) {
+		case 'unreviewed':
+			return matches.filter((m) => m.current_status !== 'yes' && m.current_status !== 'excluded');
+		case 'yes':
+			return matches.filter((m) => m.current_status === 'yes');
+		case 'excluded':
+			return matches.filter((m) => m.current_status === 'excluded');
+		default:
+			return matches;
+	}
+}
+
 // ── Combined pipeline ───────────────────────────────────────────
 
 export function filterAndSort(
@@ -93,9 +113,11 @@ export function filterAndSort(
 	tab: Tab,
 	search: string,
 	family: string | null,
-	sort: SortKey
+	sort: SortKey,
+	status: StatusFilter = 'all'
 ): EvaluationMatch[] {
 	let result = filterByTab(matches, tab);
+	result = filterByStatus(result, status);
 	result = filterBySearch(result, search);
 	result = filterByFamily(result, family);
 	return sortMatches(result, sort);
@@ -164,8 +186,26 @@ export function profileDimensions(p: ScreeningProfile | null): ProfileDimension[
 			filled: (p.governed_actors?.length ?? 0) > 0,
 			count: (p.governed_actors?.length ?? 0) + (p.government_actors?.length ?? 0)
 		},
-		{ label: 'Materials', filled: (p.materials?.length ?? 0) > 0, count: p.materials?.length ?? 0 },
-		{ label: 'Processes', filled: (p.processes?.length ?? 0) > 0, count: p.processes?.length ?? 0 },
-		{ label: 'Sector', filled: (p.sector?.length ?? 0) > 0, count: p.sector?.length ?? 0 }
+		{
+			label: 'Materials',
+			filled: (p.materials?.length ?? 0) > 0,
+			count: p.materials?.length ?? 0
+		},
+		{
+			label: 'Processes',
+			filled: (p.processes?.length ?? 0) > 0,
+			count: p.processes?.length ?? 0
+		},
+		{
+			label: 'Locations',
+			filled: (p.locations?.length ?? 0) > 0,
+			count: p.locations?.length ?? 0
+		},
+		{ label: 'Sector', filled: (p.sector?.length ?? 0) > 0, count: p.sector?.length ?? 0 },
+		{
+			label: 'Certifications',
+			filled: (p.certifications?.length ?? 0) > 0,
+			count: p.certifications?.length ?? 0
+		}
 	];
 }

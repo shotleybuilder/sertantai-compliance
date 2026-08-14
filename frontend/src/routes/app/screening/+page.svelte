@@ -18,7 +18,8 @@
 		profileDimensions,
 		TABS,
 		type Tab,
-		type SortKey
+		type SortKey,
+		type StatusFilter
 	} from '$lib/views/screener-results';
 	import {
 		getProvisions,
@@ -44,6 +45,7 @@
 	let searchQuery = '';
 	let familyFilter: string | null = null;
 	let sortBy: SortKey = 'confidence';
+	let statusFilter: StatusFilter = 'all';
 
 	let actionInProgress: string | null = null;
 	let showBulkConfirm = false;
@@ -76,7 +78,14 @@
 
 	$: tabCounts = _computeTabCounts(allMatches, result?.summary.not_evaluable ?? 0);
 
-	$: filteredMatches = _filterAndSort(allMatches, activeTab, searchQuery, familyFilter, sortBy);
+	$: filteredMatches = _filterAndSort(
+		allMatches,
+		activeTab,
+		searchQuery,
+		familyFilter,
+		sortBy,
+		statusFilter
+	);
 
 	// ── Tabs ────────────────────────────────────────────────────────
 
@@ -280,6 +289,8 @@
 			<!-- Profile Summary Bar -->
 			{#if profile}
 				{@const dims = profileDimensions(profile)}
+				{@const filledCount = dims.filter((d) => d.filled).length}
+				{@const completeness = filledCount / dims.length}
 				<div
 					class="mb-6 rounded-lg bg-white border border-gray-200 px-4 py-3 flex flex-wrap items-center gap-4"
 				>
@@ -300,13 +311,13 @@
 						<span class="font-medium">Profile</span>
 						<span
 							class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium
-							{result.summary.profile_completeness >= 0.8
+							{completeness >= 0.8
 								? 'bg-emerald-100 text-emerald-700'
-								: result.summary.profile_completeness >= 0.5
+								: completeness >= 0.5
 									? 'bg-amber-100 text-amber-700'
 									: 'bg-red-100 text-red-700'}"
 						>
-							{pct(result.summary.profile_completeness)} complete
+							{filledCount}/{dims.length} dimensions
 						</span>
 					</div>
 					<div class="flex flex-wrap gap-1.5">
@@ -372,11 +383,17 @@
 				<div
 					class="mb-4 flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3"
 				>
-					<div class="text-sm text-emerald-800">
+					<button
+						on:click={() => {
+							activeTab = 'strong';
+							statusFilter = 'unreviewed';
+						}}
+						class="text-sm text-emerald-800 hover:underline text-left"
+					>
 						<span class="font-medium">{strongUnaccepted}</span> strong match{strongUnaccepted === 1
 							? ''
 							: 'es'} not yet in your register
-					</div>
+					</button>
 					<button
 						on:click={() => (showBulkConfirm = true)}
 						class="px-3 py-1.5 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50"
@@ -476,6 +493,16 @@
 					</select>
 
 					<select
+						bind:value={statusFilter}
+						class="text-sm border border-gray-300 rounded-md py-2 pl-3 pr-8 focus:ring-emerald-500 focus:border-emerald-500"
+					>
+						<option value="all">All Statuses</option>
+						<option value="unreviewed">Unreviewed</option>
+						<option value="yes">In Register</option>
+						<option value="excluded">Excluded</option>
+					</select>
+
+					<select
 						bind:value={sortBy}
 						class="text-sm border border-gray-300 rounded-md py-2 pl-3 pr-8 focus:ring-emerald-500 focus:border-emerald-500"
 					>
@@ -493,12 +520,13 @@
 				<!-- Law Cards -->
 				{#if filteredMatches.length === 0}
 					<div class="text-center py-12 text-gray-500 text-sm">
-						{#if searchQuery || familyFilter}
+						{#if searchQuery || familyFilter || statusFilter !== 'all'}
 							No laws match your filters.
 							<button
 								on:click={() => {
 									searchQuery = '';
 									familyFilter = null;
+									statusFilter = 'all';
 								}}
 								class="text-emerald-600 hover:underline ml-1"
 							>
@@ -576,8 +604,16 @@
 										{/if}
 										<!-- Match reasons summary (collapsed) -->
 										{#if !expanded && match.match_reasons.length > 0}
+											{@const dedupedReasons = match.match_reasons.filter(
+												(r, i, arr) =>
+													arr.findIndex(
+														(o) =>
+															o.dimension === r.dimension &&
+															o.matched_codes.join(',') === r.matched_codes.join(',')
+													) === i
+											)}
 											<div class="flex flex-wrap gap-1 mt-1.5">
-												{#each match.match_reasons as reason}
+												{#each dedupedReasons as reason}
 													<span
 														class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-gray-50 text-gray-600"
 													>
@@ -613,6 +649,14 @@
 									<div class="px-4 pb-4 border-t border-gray-100">
 										<!-- Match Reasons Detail -->
 										{#if match.match_reasons.length > 0}
+											{@const expandedReasons = match.match_reasons.filter(
+												(r, i, arr) =>
+													arr.findIndex(
+														(o) =>
+															o.dimension === r.dimension &&
+															o.matched_codes.join(',') === r.matched_codes.join(',')
+													) === i
+											)}
 											<div class="mt-3">
 												<h4
 													class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2"
@@ -620,7 +664,7 @@
 													Why this law matches
 												</h4>
 												<div class="space-y-2">
-													{#each match.match_reasons as reason}
+													{#each expandedReasons as reason}
 														<div class="flex items-start gap-3">
 															<div class="flex-shrink-0 w-20">
 																<span class="text-xs font-medium text-gray-700">
@@ -737,8 +781,8 @@
 												{/if}
 												{#if match.significance_score != null}
 													<div>
-														<span class="font-medium text-gray-600">Significance Score:</span>
-														{match.significance_score}
+														<span class="font-medium text-gray-600">Significance:</span>
+														{Number(match.significance_score).toFixed(1)}
 													</div>
 												{/if}
 											</div>

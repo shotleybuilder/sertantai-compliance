@@ -326,7 +326,7 @@ describe('profileDimensions', () => {
 		};
 		const dims = profileDimensions(profile);
 
-		expect(dims).toHaveLength(5);
+		expect(dims).toHaveLength(7);
 
 		const regions = dims.find((d) => d.label === 'Regions')!;
 		expect(regions.filled).toBe(true);
@@ -344,7 +344,14 @@ describe('profileDimensions', () => {
 		expect(processes.filled).toBe(true);
 		expect(processes.count).toBe(1);
 
+		const locations = dims.find((d) => d.label === 'Locations')!;
+		expect(locations.filled).toBe(false);
+		expect(locations.count).toBe(0);
+
 		const sector = dims.find((d) => d.label === 'Sector')!;
 		expect(sector.filled).toBe(false);
+
+		const certs = dims.find((d) => d.label === 'Certifications')!;
+		expect(certs.filled).toBe(false);
 	});
 });

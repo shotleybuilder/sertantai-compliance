@@ -1,83 +1,89 @@
 ---
 session: "Fitness 4: Register Access Control"
-status: pending
-opened:
-closed:
+status: suspended
+opened: 2026-08-14
 parent: fitness/meta.md
 depends_on: []
 
 summary: >
-  Add role-based access control for the legal register. New OrgRegisterPermission
-  resource, capability enforcement on write endpoints, frontend permission gating,
-  and admin permission management UI.
+  Enforce service-scoped capabilities from JWT on compliance write endpoints.
+  Auth owns the capability model and JWT claims (auth#20). Hub owns the
+  assignment UI (hub#22). Compliance just reads and enforces.
 ---
 
-## Scope
+# Session: Fitness 4 — Register Access Control (SUSPENDED)
 
-### Backend: OrgRegisterPermission Resource
+> **Suspended 2026-08-14**: Blocked on upstream — implementing auth#20 and hub#22 first. Resume when JWT carries `capabilities` claim.
 
-- New Ash resource `SertantaiCompliance.Sync.OrgRegisterPermission`
-- Table: `org_register_permissions`
-- Fields: `organization_id`, `user_id`, `capabilities` (text array), `granted_by`, `granted_at`
-- Unique constraint on `(organization_id, user_id)`
-- Actions: read (by_organization, by_user), create, update, destroy
-- Migration for new table
+## Problem
 
-### Backend: Capability Check
+Any authenticated user in an org can modify the legal register — add/exclude laws, edit the screening profile, trigger syncs. Orgs need to restrict register-write access to a subset of users (e.g. compliance officers) without making them org-wide admins.
 
-- New plug `SertantaiCompliance.Plugs.RegisterAuthPlug`
-- Check flow:
-  1. Look up `OrgRegisterPermission` for `(organization_id, user_id)` from JWT
-  2. If found, use stored capabilities
-  3. If not found, fall back to default role mapping from JWT `role` claim
-  4. Default mapping: owner/admin → `[register:read, register:write]`, member → `[register:read]`, viewer → `[register:read]`
-- Returns 403 with `{ error: "Insufficient permissions", required: "register:write" }` on failure
+The solution is service-scoped capabilities in the JWT (Option A, validated by Gemini review). Auth issues JWTs with a `capabilities` map; compliance reads `capabilities.compliance` and enforces.
 
-### Backend: Enforcement Points
+## Architecture
 
-Apply `RegisterAuthPlug` with `register:write` to:
-- `PUT /api/screening/applicabilities/:law_name`
-- `POST /api/screening/applicabilities/bulk`
-- `PUT /api/screening/changes/:id/decide`
-- `PUT /api/screening/profile`
-- `POST /api/screening/sync`
+```
+sertantai-auth (auth#20)          sertantai-hub (hub#22)
+├── user_service_capabilities     ├── /settings/permissions UI
+│   table + management API        │   capability toggle per user
+├── Default mapping from role     └── Calls auth management API
+│   owner/admin → all caps
+│   member → [register:read]
+└── JWT includes capabilities
+    claim on token issue/refresh
+          │
+          ▼
+    JWT: { "capabilities": { "compliance": ["register:read", "register:write"] } }
+          │
+          ▼
+sertantai-compliance (THIS SESSION)
+├── CapabilityPlug reads JWT claim
+├── Enforces register:write on write endpoints
+└── Frontend hides/shows actions based on claim
+```
 
-### Backend: Permission Management API
+## Todo
 
-- `GET /api/screening/permissions` — list permissions for org (owner/admin only)
-- `PUT /api/screening/permissions/:user_id` — set capabilities for a user (owner/admin only)
-- `DELETE /api/screening/permissions/:user_id` — remove override, revert to role default
+- ⬜ Backend: `CapabilityPlug` — extract `capabilities.compliance` from `conn.assigns.jwt_claims`, assign to `conn.assigns.capabilities`
+- ⬜ Backend: `require_capability` plug function — check for a specific capability, return 403 if missing
+- ⬜ Backend: Enforce `register:write` on write endpoints (applicabilities, bulk, profile, sync, change decisions)
+- ⬜ Backend: `GET /api/screening/my-capabilities` — return current user's compliance capabilities from JWT (for frontend)
+- ⬜ Frontend: capabilities store — parse from JWT or fetch from endpoint, expose reactive `canWrite` flag
+- ⬜ Frontend: hide write actions (Add/Exclude/Bulk Accept, profile edit) when `canWrite` is false
+- ⬜ Frontend: read-only banner on screening page for users without `register:write`
+- ⬜ Tests: capability plug (present, missing, empty, malformed claims)
+- ⬜ Tests: endpoint enforcement (403 without register:write, 200 with it)
 
-### Frontend: Permission-Aware UI
+## Dependencies
 
-- Fetch user capabilities on auth (new `GET /api/screening/my-permissions` endpoint)
-- Hide action buttons (Add/Exclude/Bulk Accept) for read-only users
-- Show "Register Manager permissions required" banner on write-protected pages
-- Profile editing gated behind `register:write`
+- ⬜ shotleybuilder/sertantai-auth#20 — capability data model, JWT claims, management API
+- ⬜ shotleybuilder/sertantai-hub#22 — capability assignment UI for org admins
+- ✅ Gemini review: Option A validated (`backend/data/code-reviews/2026-08-14-rbac-option-a-vs-b-gemini-flash.md`)
 
-### Frontend: Permission Management Page
+## What compliance does NOT own
 
-- New route `/app/settings/permissions` (owner/admin only)
-- List org users with current capabilities
-- Toggle `register:write` on/off per user
-- Shows role-derived defaults vs explicit overrides
+- Capability storage (auth's `user_service_capabilities` table)
+- Default role → capability mapping (auth builds this into JWT at issue time)
+- Capability assignment UI (hub's `/settings/permissions` page)
+- User/org management (auth)
 
-## Files to Touch
+Compliance is a pure consumer — it reads the JWT claim and enforces. No new tables, no permission management API, no migration.
 
-- `backend/lib/sertantai_compliance/sync/org_register_permission.ex` — new resource
-- `backend/lib/sertantai_compliance_web/plugs/register_auth_plug.ex` — new plug
-- `backend/lib/sertantai_compliance_web/controllers/screening_controller.ex` — add plug + permission endpoints
-- `backend/lib/sertantai_compliance_web/router.ex` — add routes
-- `backend/priv/repo/migrations/XXXXXX_add_org_register_permissions.exs` — new migration
-- `frontend/src/lib/stores/permissions.ts` — new store
-- `frontend/src/routes/app/settings/permissions/+page.svelte` — new page
+## Files to touch
 
-## Acceptance Criteria
+- `backend/lib/sertantai_compliance_web/plugs/capability_plug.ex` — new plug
+- `backend/lib/sertantai_compliance_web/controllers/screening_controller.ex` — add plug to write actions
+- `backend/lib/sertantai_compliance_web/router.ex` — add my-capabilities endpoint
+- `frontend/src/lib/stores/capabilities.ts` — new store
+- `frontend/src/routes/app/screening/+page.svelte` — gate write actions
+- `frontend/src/routes/app/profile/+page.svelte` — gate profile editing
 
-- [ ] `OrgRegisterPermission` resource with migration
-- [ ] Write endpoints return 403 for users without `register:write`
-- [ ] Default role mapping works when no explicit permission exists
-- [ ] Explicit per-user overrides take precedence over role defaults
-- [ ] Permission management UI for org owners/admins
-- [ ] Frontend hides write actions for read-only users
-- [ ] Tests for capability check flow (override, fallback, deny)
+## Interim approach (before auth#20 lands)
+
+Until auth ships the capabilities claim, compliance can enforce based on the existing `role` claim as a stopgap:
+- `owner`/`admin` → allow all
+- `member` → read-only
+- `viewer` → read-only
+
+This gives immediate value and requires zero auth changes. When auth#20 lands, swap the plug to read `capabilities.compliance` instead of `role`. The enforcement points and frontend gating remain identical.

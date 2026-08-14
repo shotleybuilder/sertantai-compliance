@@ -398,27 +398,47 @@
 
 	// ── Navigation ──────────────────────────────────────────────────
 
+	function pushStepToHistory(step: number) {
+		if (browser) {
+			const hash = step === 0 ? '' : `#step=${step}`;
+			history.pushState({ step }, '', `${location.pathname}${hash}`);
+		}
+	}
+
+	function readStepFromHash(): number {
+		if (!browser) return 0;
+		const match = location.hash.match(/^#step=(\d+)$/);
+		if (match) {
+			const step = parseInt(match[1], 10);
+			if (step >= 0 && step <= TOTAL_STEPS) return step;
+		}
+		return 0;
+	}
+
 	async function nextStep() {
-		// Save before advancing
 		await doSave();
 		if (currentStep < TOTAL_STEPS) {
 			currentStep++;
+			pushStepToHistory(currentStep);
 		}
 	}
 
 	function prevStep() {
 		if (currentStep > 0) {
 			currentStep--;
+			pushStepToHistory(currentStep);
 		}
 	}
 
 	function goToStep(idx: number) {
 		currentStep = idx;
+		pushStepToHistory(currentStep);
 	}
 
 	function skipStep() {
 		if (currentStep < TOTAL_STEPS) {
 			currentStep++;
+			pushStepToHistory(currentStep);
 		}
 	}
 
@@ -432,8 +452,21 @@
 		return tag.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 	}
 
+	function handlePopState(e: PopStateEvent) {
+		if (e.state?.step != null) {
+			currentStep = e.state.step;
+		} else {
+			currentStep = readStepFromHash();
+		}
+	}
+
 	onMount(() => {
-		if (browser) loadData();
+		if (browser) {
+			currentStep = readStepFromHash();
+			loadData();
+			window.addEventListener('popstate', handlePopState);
+			return () => window.removeEventListener('popstate', handlePopState);
+		}
 	});
 </script>
 
@@ -467,34 +500,46 @@
 						dimensions)
 					</span>
 				</div>
-				<div class="w-full bg-gray-200 rounded-full h-2">
-					<div
-						class="bg-emerald-500 h-2 rounded-full transition-all duration-300"
-						style="width: {(currentStep / TOTAL_STEPS) * 100}%"
-					></div>
-				</div>
-				<!-- Step dots -->
-				<div class="flex items-center gap-1">
+				<!-- Step buttons -->
+				<div class="flex items-center gap-1.5">
 					{#each STEPS as step, i}
 						<button
 							on:click={() => goToStep(i)}
-							class="flex-1 h-1.5 rounded-full transition-colors
-								{i === currentStep
-								? 'bg-emerald-500'
-								: i < currentStep
-									? stepHasSelections(step)
-										? 'bg-emerald-300'
-										: 'bg-gray-300'
-									: 'bg-gray-200'}"
+							class="flex-1 py-2 group relative"
 							title="{step.label}{stepHasSelections(step) ? ' (selections made)' : ''}"
-						></button>
+						>
+							<div
+								class="h-2 rounded-full transition-colors
+								{i === currentStep
+									? 'bg-emerald-500'
+									: i < currentStep
+										? stepHasSelections(step)
+											? 'bg-emerald-300'
+											: 'bg-gray-300'
+										: 'bg-gray-200'}"
+							></div>
+							<span
+								class="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none"
+							>
+								{step.label}
+							</span>
+						</button>
 					{/each}
 					<button
 						on:click={() => goToStep(REVIEW_STEP)}
-						class="flex-1 h-1.5 rounded-full transition-colors
-							{currentStep === REVIEW_STEP ? 'bg-emerald-500' : 'bg-gray-200'}"
+						class="flex-1 py-2 group relative"
 						title="Review & Evaluate"
-					></button>
+					>
+						<div
+							class="h-2 rounded-full transition-colors
+							{currentStep === REVIEW_STEP ? 'bg-emerald-500' : 'bg-gray-200'}"
+						></div>
+						<span
+							class="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none"
+						>
+							Review
+						</span>
+					</button>
 				</div>
 			</div>
 

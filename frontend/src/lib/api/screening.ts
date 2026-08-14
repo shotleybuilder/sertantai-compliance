@@ -69,6 +69,14 @@ export interface EvaluationMatch {
 	};
 }
 
+export interface VennStats {
+	action_queue: number;
+	aligned: number;
+	register_only: number;
+	register_total: number;
+	screener_total: number;
+}
+
 export interface EvaluationSummary {
 	total_making_laws: number;
 	evaluated: number;
@@ -79,6 +87,7 @@ export interface EvaluationSummary {
 		medium_confidence: number;
 		low_confidence: number;
 	};
+	venn?: VennStats;
 	profile_completeness: number;
 	profile_dimensions: string[];
 }

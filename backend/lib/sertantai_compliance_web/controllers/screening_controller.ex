@@ -582,6 +582,23 @@ defmodule SertantaiComplianceWeb.ScreeningController do
     covered = Enum.count(all_dims, fn d -> Map.get(profile, d, []) != [] end)
     completeness = Float.round(covered / length(all_dims), 2)
 
+    # Venn stats: screener matches vs register
+    screener_names = MapSet.new(applying, fn m -> m.law_name end)
+
+    register_names =
+      status_map
+      |> Enum.filter(fn {_, s} -> s == "yes" end)
+      |> Enum.map(fn {n, _} -> n end)
+      |> MapSet.new()
+
+    aligned = MapSet.intersection(screener_names, register_names) |> MapSet.size()
+
+    action_queue =
+      applying
+      |> Enum.count(fn m -> m.current_status != "yes" and m.current_status != "excluded" end)
+
+    register_only = MapSet.difference(register_names, screener_names) |> MapSet.size()
+
     json(conn, %{
       matches: matches,
       summary: %{
@@ -593,6 +610,13 @@ defmodule SertantaiComplianceWeb.ScreeningController do
           high_confidence: high,
           medium_confidence: medium,
           low_confidence: low
+        },
+        venn: %{
+          action_queue: action_queue,
+          aligned: aligned,
+          register_only: register_only,
+          register_total: MapSet.size(register_names),
+          screener_total: MapSet.size(screener_names)
         },
         profile_completeness: completeness,
         profile_dimensions: Map.keys(profile)

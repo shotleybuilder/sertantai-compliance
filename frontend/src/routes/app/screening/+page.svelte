@@ -352,31 +352,35 @@
 				</div>
 			{/if}
 
-			<!-- Summary Stats -->
-			<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-				<div class="rounded-lg bg-white border border-gray-200 p-4">
-					<div class="text-2xl font-bold text-gray-900">
-						{result.summary.matches.total}
+			<!-- Dashboard Stats: Venn -->
+			{@const venn = result.summary.venn}
+			<div class="grid grid-cols-3 gap-3 mb-6">
+				<button
+					on:click={() => {
+						activeTab = 'strong';
+						statusFilter = 'unreviewed';
+					}}
+					class="rounded-lg bg-amber-50 border border-amber-200 p-4 text-left hover:border-amber-300 transition-colors"
+				>
+					<div class="text-2xl font-bold text-amber-700">
+						{venn?.action_queue ?? 0}
 					</div>
-					<div class="text-sm text-gray-500">Matching Laws</div>
-				</div>
+					<div class="text-sm text-amber-600">Action Queue</div>
+					<div class="text-xs text-amber-500 mt-0.5">Screener matches to review</div>
+				</button>
 				<div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
 					<div class="text-2xl font-bold text-emerald-700">
-						{result.summary.matches.high_confidence}
+						{venn?.aligned ?? 0}
 					</div>
-					<div class="text-sm text-emerald-600">Strong</div>
+					<div class="text-sm text-emerald-600">Aligned</div>
+					<div class="text-xs text-emerald-500 mt-0.5">In screener & register</div>
 				</div>
-				<div class="rounded-lg bg-amber-50 border border-amber-200 p-4">
-					<div class="text-2xl font-bold text-amber-700">
-						{result.summary.matches.medium_confidence}
+				<div class="rounded-lg bg-orange-50 border border-orange-200 p-4">
+					<div class="text-2xl font-bold text-orange-700">
+						{venn?.register_only ?? 0}
 					</div>
-					<div class="text-sm text-amber-600">Probable</div>
-				</div>
-				<div class="rounded-lg bg-red-50 border border-red-200 p-4">
-					<div class="text-2xl font-bold text-red-700">
-						{result.summary.matches.low_confidence}
-					</div>
-					<div class="text-sm text-red-600">Possible</div>
+					<div class="text-sm text-orange-600">Screener Gaps</div>
+					<div class="text-xs text-orange-500 mt-0.5">In register, not screener</div>
 				</div>
 			</div>
 
@@ -855,6 +859,7 @@
 													{#if groups.length === 0}
 														<p class="text-sm text-gray-400">No provisions found.</p>
 													{:else}
+														<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 														<div
 															class="space-y-3 max-h-96 overflow-y-auto"
 															on:click|stopPropagation
@@ -925,6 +930,7 @@
 													<!-- Applicability Tree tab -->
 												{:else if currentTab === 'tree'}
 													{#if prov.applicability_tree}
+														<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 														<div on:click|stopPropagation>
 															<TreeSummary
 																tree={prov.applicability_tree}
@@ -950,6 +956,7 @@
 													{#if actors.length === 0}
 														<p class="text-sm text-gray-400">No actor data available.</p>
 													{:else}
+														<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 														<div
 															class="space-y-1 max-h-96 overflow-y-auto"
 															on:click|stopPropagation

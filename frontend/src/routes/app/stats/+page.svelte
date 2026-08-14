@@ -74,12 +74,7 @@
 			if (evalResult) {
 				evalSummary = evalResult.summary;
 				screenerMatches = evalResult.summary.matches.total;
-				// "To review" = matched laws not yet in register or excluded
-				const actioned = evalResult.matches.filter(
-					(m) => m.applies && (m.current_status === 'yes' || m.current_status === 'excluded')
-				).length;
-				toReview = screenerMatches - actioned;
-				if (toReview < 0) toReview = 0;
+				toReview = evalResult.summary.venn?.action_queue ?? 0;
 			}
 
 			if (metricsRes.ok) complianceMetrics = await metricsRes.json();
@@ -118,82 +113,36 @@
 			</button>
 		</div>
 	{:else}
-		<!-- Overview Cards -->
-		<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-			<div class="bg-white rounded-lg border border-gray-200 p-4">
-				<div class="text-sm text-gray-500">Screener Matches</div>
-				<div class="text-3xl font-bold text-gray-900">{screenerMatches}</div>
-				<div class="text-xs text-gray-400 mt-1">of {totalMaking} making laws</div>
+		<!-- Venn Stats: Screener vs Register -->
+		{@const venn = evalSummary?.venn}
+		<div class="grid grid-cols-3 gap-4">
+			<a
+				href="/app/screening"
+				class="bg-amber-50 rounded-lg border border-amber-200 p-4 hover:border-amber-300 transition-colors"
+			>
+				<div class="text-sm text-amber-600">Action Queue</div>
+				<div class="text-3xl font-bold text-amber-700">{venn?.action_queue ?? toReview}</div>
+				<div class="text-xs text-amber-500 mt-1">Screener matches to review</div>
+			</a>
+			<div class="bg-emerald-50 rounded-lg border border-emerald-200 p-4">
+				<div class="text-sm text-emerald-600">Aligned</div>
+				<div class="text-3xl font-bold text-emerald-700">{venn?.aligned ?? 0}</div>
+				<div class="text-xs text-emerald-500 mt-1">In screener & register</div>
 			</div>
-			<div class="bg-white rounded-lg border border-emerald-200 p-4">
-				<div class="text-sm text-gray-500">In My Register</div>
-				<div class="text-3xl font-bold text-emerald-600">{registerCount}</div>
-				<div class="text-xs text-gray-400 mt-1">
-					{pct(registerCount, screenerMatches || totalMaking)}% of matches
-				</div>
-			</div>
-			<div class="bg-white rounded-lg border border-gray-200 p-4">
-				<div class="text-sm text-gray-500">Excluded</div>
-				<div class="text-3xl font-bold text-gray-400">{excludedCount}</div>
-			</div>
-			<div class="bg-white rounded-lg border border-amber-200 p-4">
-				<div class="text-sm text-gray-500">To Review</div>
-				<div class="text-3xl font-bold text-amber-600">{toReview}</div>
-				<div class="text-xs text-gray-400 mt-1">matched but not actioned</div>
+			<div class="bg-orange-50 rounded-lg border border-orange-200 p-4">
+				<div class="text-sm text-orange-600">Screener Gaps</div>
+				<div class="text-3xl font-bold text-orange-700">{venn?.register_only ?? 0}</div>
+				<div class="text-xs text-orange-500 mt-1">In register, not screener</div>
 			</div>
 		</div>
 
-		<!-- Confidence Breakdown -->
-		{#if evalSummary}
-			<div class="grid grid-cols-3 gap-3">
-				<div class="bg-emerald-50 rounded-lg border border-emerald-200 px-4 py-3 text-center">
-					<div class="text-xl font-bold text-emerald-700">
-						{evalSummary.matches.high_confidence}
-					</div>
-					<div class="text-xs text-emerald-600">Strong (&ge; 80%)</div>
-				</div>
-				<div class="bg-amber-50 rounded-lg border border-amber-200 px-4 py-3 text-center">
-					<div class="text-xl font-bold text-amber-700">
-						{evalSummary.matches.medium_confidence}
-					</div>
-					<div class="text-xs text-amber-600">Probable (50-80%)</div>
-				</div>
-				<div class="bg-red-50 rounded-lg border border-red-200 px-4 py-3 text-center">
-					<div class="text-xl font-bold text-red-700">{evalSummary.matches.low_confidence}</div>
-					<div class="text-xs text-red-600">Possible (&lt; 50%)</div>
-				</div>
-			</div>
-		{/if}
-
-		<!-- Progress Bar -->
-		<div class="bg-white rounded-lg border border-gray-200 p-4">
-			<div class="flex items-center justify-between mb-2">
-				<span class="text-sm font-medium text-gray-700">Screening Progress</span>
-				<span class="text-sm text-gray-500"
-					>{registerCount + excludedCount} of {screenerMatches || totalMaking} reviewed</span
-				>
-			</div>
-			<div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden flex">
-				<div
-					class="h-full bg-emerald-500 transition-all duration-300"
-					style="width: {pct(registerCount, screenerMatches || totalMaking)}%"
-				></div>
-				<div
-					class="h-full bg-gray-400 transition-all duration-300"
-					style="width: {pct(excludedCount, screenerMatches || totalMaking)}%"
-				></div>
-			</div>
-			<div class="flex gap-4 mt-2 text-xs text-gray-500">
-				<span class="flex items-center gap-1">
-					<span class="w-2 h-2 rounded-full bg-emerald-500"></span> In Register
-				</span>
-				<span class="flex items-center gap-1">
-					<span class="w-2 h-2 rounded-full bg-gray-400"></span> Excluded
-				</span>
-				<span class="flex items-center gap-1">
-					<span class="w-2 h-2 rounded-full bg-gray-200"></span> To Review
-				</span>
-			</div>
+		<!-- Context row -->
+		<div class="flex flex-wrap gap-4 text-xs text-gray-500">
+			<span>{screenerMatches} screener matches of {totalMaking} making laws</span>
+			<span>{venn?.register_total ?? registerCount} laws in register</span>
+			{#if excludedCount > 0}
+				<span>{excludedCount} excluded</span>
+			{/if}
 		</div>
 
 		<!-- Family Distribution -->

@@ -119,6 +119,7 @@
 			on:keydown={handleKeydown}
 			role="treeitem"
 			aria-expanded={!collapsed}
+			aria-selected={nodeResult}
 			tabindex="0"
 		>
 			<svg
@@ -153,7 +154,7 @@
 			</div>
 		{/if}
 	{:else if node.op === 'Not'}
-		<div class="flex items-center gap-1.5" role="treeitem">
+		<div class="flex items-center gap-1.5" role="treeitem" aria-selected={nodeResult}>
 			<span class="font-semibold text-red-500 uppercase text-[10px] tracking-wider">NOT</span>
 			{#if nodeResult}
 				<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700"

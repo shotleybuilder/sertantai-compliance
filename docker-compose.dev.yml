@@ -35,14 +35,16 @@ services:
       - "-c"
       - "max_wal_senders=10"
 
-  # ElectricSQL sync service (v1.0 - new HTTP Shape API)
+  # ElectricSQL sync service
+  # In dev mode (dev-start), Electric runs as a standalone container
+  # pointing at legal's shared DB. This docker-compose Electric is for
+  # full-stack docker testing only.
   electric:
     image: electricsql/electric:latest
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sertantai_compliance_dev
       HTTP_PORT: 3000
       ELECTRIC_INSECURE: "true"  # Development only! Use ELECTRIC_SECRET in production
-      PG_PROXY_PASSWORD: proxy_password  # Secure in production!
     ports:
       - "3003:3000"  # HTTP API for Shape-based sync
     networks:

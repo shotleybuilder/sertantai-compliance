@@ -81,18 +81,47 @@ export async function getPglite(): Promise<PGLiteWithExtensions> {
 	// Prevent concurrent initialization
 	if (pglitePromise) return pglitePromise;
 
-	pglitePromise = PGlite.create(dbName, {
+	pglitePromise = initWithRetry(dbName);
+
+	return pglitePromise;
+}
+
+async function initWithRetry(dbName: string): Promise<PGLiteWithExtensions> {
+	try {
+		return await createInstance(dbName);
+	} catch (err) {
+		// PGLite 0.3→0.5 upgrade: incompatible IndexedDB format — nuke and retry
+		console.warn(`[PGLite] Init failed, clearing stale IndexedDB and retrying:`, err);
+		const idbName = dbName.replace('idb://', '');
+		try {
+			// Delete all IndexedDB databases matching this name prefix
+			const dbs = await indexedDB.databases();
+			for (const db of dbs) {
+				if (db.name && db.name.includes(idbName)) {
+					indexedDB.deleteDatabase(db.name);
+					console.log(`[PGLite] Deleted stale IDB: ${db.name}`);
+				}
+			}
+		} catch {
+			// indexedDB.databases() not supported in all browsers — try direct delete
+			indexedDB.deleteDatabase(idbName);
+		}
+		// Brief pause for IDB cleanup to complete
+		await new Promise((r) => setTimeout(r, 200));
+		return createInstance(dbName);
+	}
+}
+
+async function createInstance(dbName: string): Promise<PGLiteWithExtensions> {
+	const pg = await PGlite.create(dbName, {
 		extensions: {
 			live,
 			electric: electricSync()
 		},
 		relaxedDurability: true
-	}).then((pg) => {
-		pgliteInstance = pg as unknown as PGLiteWithExtensions;
-		currentDbName = dbName;
-		console.log(`[PGLite] Initialized: ${dbName}`);
-		return pgliteInstance;
 	});
-
-	return pglitePromise;
+	pgliteInstance = pg as unknown as PGLiteWithExtensions;
+	currentDbName = dbName;
+	console.log(`[PGLite] Initialized: ${dbName}`);
+	return pgliteInstance;
 }

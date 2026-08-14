@@ -54,7 +54,7 @@ config :sertantai_compliance, SertantaiComplianceWeb.Endpoint,
 # Auth service URL for JWKS
 config :sertantai_compliance,
   auth_url: "http://localhost:4000",
-  electric_url: "http://localhost:3003",
+  electric_url: "http://localhost:3002",
   electric_secret: nil
 
 # Enable dev routes for dashboard and mailbox

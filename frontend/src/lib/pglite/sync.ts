@@ -274,6 +274,39 @@ export async function startSync(): Promise<void> {
 		unsubscribeFns.push(result.unsubscribe);
 		console.log('[PGLite Sync] Shape subscription active (all countries)');
 
+		// Definitions shape (public — no auth required)
+		const defsResult = await pg.electric.syncShapeToTable({
+			shape: {
+				url: `${ELECTRIC_URL}/v1/shape`,
+				fetchClient: electricFetchClient,
+				params: {
+					table: 'legislative_definitions'
+				}
+			},
+			table: 'definitions',
+			primaryKey: ['id'],
+			shapeKey: 'definitions',
+			mapColumns: (message) => {
+				const val = message.value;
+				const mapped: Record<string, unknown> = { ...val };
+				// Electric sends booleans as strings — convert for PGLite BOOLEAN column
+				if (typeof mapped.references_other_law === 'string') {
+					mapped.references_other_law = mapped.references_other_law === 'true';
+				}
+				return mapped;
+			},
+			onInitialSync: async () => {
+				const countRes = await pg.query<{ count: number }>(
+					'SELECT COUNT(*)::int AS count FROM definitions'
+				);
+				console.log(`[PGLite Sync] Definitions synced: ${countRes.rows[0]?.count ?? 0} records`);
+			},
+			onError: async (error: Error) => {
+				console.error('[PGLite Sync] Definitions sync error:', error);
+			}
+		});
+		unsubscribeFns.push(defsResult.unsubscribe);
+
 		// Org-scoped applicabilities shape (auth-gated)
 		const orgId = getOrgIdFromToken();
 		if (orgId) {

@@ -20,6 +20,16 @@
 		type Tab,
 		type SortKey
 	} from '$lib/views/screener-results';
+	import {
+		getProvisions,
+		groupByDrrp,
+		buildActorSummary,
+		provisionRef,
+		DRRP_META,
+		type ProvisionsResult,
+		type DrrpType
+	} from '$lib/api/provisions';
+	import ExpressionTree from '$lib/components/screening/ExpressionTree.svelte';
 
 	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4004';
 
@@ -41,6 +51,18 @@
 
 	let undoToast: { lawName: string; action: string; previousStatus: string } | null = null;
 	let undoTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Drill-down state
+	let provisionCache: Record<string, ProvisionsResult> = {};
+	let provisionLoading: string | null = null;
+	let drilldownTab: Record<string, 'provisions' | 'tree' | 'actors'> = {};
+	let actorFilter: string | null = null;
+
+	const drilldownTabs: { key: 'provisions' | 'tree' | 'actors'; label: string }[] = [
+		{ key: 'provisions', label: 'Provisions' },
+		{ key: 'tree', label: 'Applicability Tree' },
+		{ key: 'actors', label: 'Actor Breakdown' }
+	];
 
 	// ── Derived ─────────────────────────────────────────────────────
 
@@ -154,6 +176,31 @@
 		}
 	}
 
+	// ── Drill-down ──────────────────────────────────────────────────
+
+	async function loadProvisions(lawName: string) {
+		if (provisionCache[lawName]) return;
+		provisionLoading = lawName;
+		try {
+			provisionCache[lawName] = await getProvisions(lawName);
+			provisionCache = provisionCache; // trigger reactivity
+			if (!drilldownTab[lawName]) {
+				drilldownTab[lawName] = 'provisions';
+				drilldownTab = drilldownTab;
+			}
+		} catch (e) {
+			console.error('Failed to load provisions:', e);
+		} finally {
+			provisionLoading = null;
+		}
+	}
+
+	function setDrilldownTab(lawName: string, tab: 'provisions' | 'tree' | 'actors') {
+		drilldownTab[lawName] = tab;
+		drilldownTab = drilldownTab;
+		actorFilter = null;
+	}
+
 	// ── Undo ────────────────────────────────────────────────────────
 
 	function showUndoToast(lawName: string, action: string, previousStatus: string) {
@@ -181,6 +228,19 @@
 		if (rating === 'MEDIUM') return { bg: 'bg-amber-50', text: 'text-amber-700' };
 		if (rating === 'LOW') return { bg: 'bg-blue-50', text: 'text-blue-700' };
 		return { bg: 'bg-gray-50', text: 'text-gray-500' };
+	}
+
+	function filteredProvisionGroups(lawName: string, filter: string | null) {
+		const prov = provisionCache[lawName];
+		if (!prov) return [];
+		const filtered = filter
+			? prov.provisions.filter((p) => p.actors.some((a) => a.label === filter))
+			: prov.provisions;
+		return groupByDrrp(filtered);
+	}
+
+	function drrpMeta(type: string) {
+		return DRRP_META[type.toLowerCase() as DrrpType] || null;
 	}
 
 	function toggleCard(name: string) {
@@ -683,6 +743,184 @@
 												{/if}
 											</div>
 										{/if}
+
+										<!-- Drill-Down: Provisions / Tree / Actors -->
+										<div class="mt-4 pt-3 border-t border-gray-100">
+											{#if !provisionCache[match.law_name] && provisionLoading !== match.law_name}
+												<button
+													on:click|stopPropagation={() => loadProvisions(match.law_name)}
+													class="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+												>
+													View provisions & obligations
+												</button>
+											{:else if provisionLoading === match.law_name}
+												<div class="flex items-center gap-2 text-sm text-gray-400">
+													<div
+														class="w-4 h-4 border-2 border-gray-200 border-t-emerald-500 rounded-full animate-spin"
+													></div>
+													Loading provisions...
+												</div>
+											{:else if provisionCache[match.law_name]}
+												{@const prov = provisionCache[match.law_name]}
+												{@const currentTab = drilldownTab[match.law_name] || 'provisions'}
+
+												<!-- Tab bar -->
+												<div class="flex gap-1 mb-3">
+													{#each drilldownTabs as tab}
+														<button
+															on:click|stopPropagation={() =>
+																setDrilldownTab(match.law_name, tab.key)}
+															class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors
+															{currentTab === tab.key
+																? 'bg-emerald-100 text-emerald-700'
+																: 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}"
+														>
+															{tab.key === 'provisions' ? `Provisions (${prov.total})` : tab.label}
+														</button>
+													{/each}
+												</div>
+
+												<!-- Provisions tab -->
+												{#if currentTab === 'provisions'}
+													{@const groups = filteredProvisionGroups(match.law_name, actorFilter)}
+													{#if actorFilter}
+														<div class="mb-2 flex items-center gap-2 text-xs text-gray-500">
+															<span
+																>Filtered by: <span class="font-medium text-gray-700"
+																	>{actorFilter}</span
+																></span
+															>
+															<button
+																on:click|stopPropagation={() => (actorFilter = null)}
+																class="text-emerald-600 hover:underline">Clear</button
+															>
+														</div>
+													{/if}
+													{#if groups.length === 0}
+														<p class="text-sm text-gray-400">No provisions found.</p>
+													{:else}
+														<div
+															class="space-y-3 max-h-96 overflow-y-auto"
+															on:click|stopPropagation
+														>
+															{#each groups as group}
+																{@const meta = DRRP_META[group.type]}
+																<div>
+																	<div
+																		class="text-xs font-semibold uppercase tracking-wide mb-1 {meta.text}"
+																	>
+																		{group.label} ({group.provisions.length})
+																	</div>
+																	<div class="space-y-1">
+																		{#each group.provisions as p}
+																			<div class="rounded border border-gray-100 px-3 py-2 text-xs">
+																				<div class="flex items-start gap-2">
+																					<span class="flex-shrink-0 font-mono text-gray-400 w-16"
+																						>{provisionRef(p)}</span
+																					>
+																					<div class="flex-1 min-w-0">
+																						{#if p.clause_refined}
+																							<p class="text-gray-700 font-medium">
+																								{p.clause_refined}
+																							</p>
+																						{:else}
+																							<p class="text-gray-500 line-clamp-2">
+																								{p.text}
+																							</p>
+																						{/if}
+																						<div class="flex flex-wrap gap-1 mt-1">
+																							{#each p.drrp_types as t}
+																								{@const dm = drrpMeta(t)}
+																								{#if dm}
+																									<span
+																										class="px-1 py-0.5 rounded {dm.bg} {dm.text}"
+																										>{dm.label}</span
+																									>
+																								{/if}
+																							{/each}
+																							{#each p.actors.slice(0, 3) as actor}
+																								<button
+																									class="px-1 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700"
+																									on:click|stopPropagation={() =>
+																										(actorFilter = actor.label)}
+																								>
+																									{actor.label}
+																								</button>
+																							{/each}
+																							{#if p.significance_overall}
+																								<span
+																									class="px-1 py-0.5 rounded bg-gray-50 text-gray-500"
+																								>
+																									{p.significance_overall}
+																								</span>
+																							{/if}
+																						</div>
+																					</div>
+																				</div>
+																			</div>
+																		{/each}
+																	</div>
+																</div>
+															{/each}
+														</div>
+													{/if}
+
+													<!-- Applicability Tree tab -->
+												{:else if currentTab === 'tree'}
+													{#if prov.applicability_tree}
+														<div class="max-h-96 overflow-y-auto text-xs" on:click|stopPropagation>
+															<ExpressionTree
+																node={prov.applicability_tree}
+																matchReasons={match.match_reasons}
+															/>
+														</div>
+													{:else}
+														<p class="text-sm text-gray-400">
+															No applicability tree available for this law.
+														</p>
+													{/if}
+
+													<!-- Actor Breakdown tab -->
+												{:else if currentTab === 'actors'}
+													{@const actors = buildActorSummary(prov.provisions)}
+													{#if actors.length === 0}
+														<p class="text-sm text-gray-400">No actor data available.</p>
+													{:else}
+														<div
+															class="space-y-1 max-h-96 overflow-y-auto"
+															on:click|stopPropagation
+														>
+															{#each actors as entry}
+																<button
+																	on:click|stopPropagation={() => {
+																		setDrilldownTab(match.law_name, 'provisions');
+																		actorFilter = entry.actor;
+																	}}
+																	class="w-full text-left flex items-center gap-3 px-3 py-2 rounded border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50 text-xs transition-colors"
+																>
+																	<span class="font-medium text-gray-700 flex-1">
+																		{entry.actor}
+																	</span>
+																	<div class="flex gap-1">
+																		{#each [...entry.types] as t}
+																			{@const dm = drrpMeta(t)}
+																			{#if dm}
+																				<span class="px-1 py-0.5 rounded {dm.bg} {dm.text}">
+																					{dm.label}
+																				</span>
+																			{/if}
+																		{/each}
+																	</div>
+																	<span class="text-gray-400 tabular-nums">
+																		{entry.count} provision{entry.count === 1 ? '' : 's'}
+																	</span>
+																</button>
+															{/each}
+														</div>
+													{/if}
+												{/if}
+											{/if}
+										</div>
 
 										<!-- Actions -->
 										<div class="mt-4 flex items-center gap-2 pt-3 border-t border-gray-100">

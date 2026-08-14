@@ -145,24 +145,57 @@ export function groupByDrrp(
 	}));
 }
 
+export interface ActorSummaryEntry {
+	actor: string;
+	category: ActorCategory;
+	position: string;
+	count: number;
+	types: Set<string>;
+}
+
 /** Build actor summary from provisions using actors JSONB */
-export function buildActorSummary(
-	provisions: Provision[]
-): { actor: string; category: ActorCategory; count: number; types: Set<string> }[] {
-	const map = new Map<string, { category: ActorCategory; count: number; types: Set<string> }>();
+export function buildActorSummary(provisions: Provision[]): ActorSummaryEntry[] {
+	const map = new Map<
+		string,
+		{ category: ActorCategory; positions: Map<string, number>; count: number; types: Set<string> }
+	>();
 
 	for (const p of provisions) {
 		for (const a of p.actors) {
 			const category: ActorCategory = a.role === 'government' ? 'government' : 'governed';
-			const entry = map.get(a.label) || { category, count: 0, types: new Set<string>() };
+			const entry = map.get(a.label) || {
+				category,
+				positions: new Map<string, number>(),
+				count: 0,
+				types: new Set<string>()
+			};
 			entry.count++;
+			const pos = a.position || 'mentioned';
+			entry.positions.set(pos, (entry.positions.get(pos) || 0) + 1);
 			for (const t of p.drrp_types) entry.types.add(t);
 			map.set(a.label, entry);
 		}
 	}
 
 	return [...map.entries()]
-		.map(([actor, data]) => ({ actor, ...data }))
+		.map(([actor, data]) => {
+			// Most common position for this actor
+			let topPosition = 'mentioned';
+			let topCount = 0;
+			for (const [pos, cnt] of data.positions) {
+				if (cnt > topCount) {
+					topPosition = pos;
+					topCount = cnt;
+				}
+			}
+			return {
+				actor,
+				category: data.category,
+				position: topPosition,
+				count: data.count,
+				types: data.types
+			};
+		})
 		.sort((a, b) => b.count - a.count);
 }
 
@@ -186,6 +219,27 @@ export function provisionRef(p: Provision): string {
 	if (p.sub_paragraph) parts.push(`(${p.sub_paragraph})`);
 	if (p.schedule) parts.push(`Sch. ${p.schedule}`);
 	return parts.join('') || p.section_type;
+}
+
+// ── Actor pill colours ────────────────────────────────────────
+
+/** Map actor role + position to DRRP-aligned colours */
+export function actorPillStyle(actor: ActorEntry): { bg: string; text: string } {
+	const gov = actor.role === 'government';
+	switch (actor.position) {
+		case 'active':
+			return gov
+				? { bg: 'bg-amber-50', text: 'text-amber-700' } // Responsibility
+				: { bg: 'bg-red-50', text: 'text-red-700' }; // Duty
+		case 'counterparty':
+			return gov
+				? { bg: 'bg-purple-50', text: 'text-purple-700' } // Power
+				: { bg: 'bg-blue-50', text: 'text-blue-700' }; // Right
+		case 'beneficiary':
+			return { bg: 'bg-cyan-50', text: 'text-cyan-700' };
+		default:
+			return { bg: 'bg-gray-100', text: 'text-gray-600' }; // mentioned / unknown
+	}
 }
 
 // ── API ────────────────────────────────────────────────────────

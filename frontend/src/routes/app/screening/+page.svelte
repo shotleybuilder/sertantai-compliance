@@ -26,6 +26,7 @@
 		groupByDrrp,
 		buildActorSummary,
 		provisionRef,
+		actorPillStyle,
 		DRRP_META,
 		type ProvisionsResult,
 		type DrrpType
@@ -808,8 +809,8 @@
 												{@const prov = provisionCache[match.law_name]}
 												{@const currentTab = drilldownTab[match.law_name] || 'provisions'}
 
-												<!-- Tab bar -->
-												<div class="flex gap-1 mb-3">
+												<!-- Tab bar + legend -->
+												<div class="flex items-center gap-1 mb-3 flex-wrap">
 													{#each drilldownTabs as tab}
 														<button
 															on:click|stopPropagation={() =>
@@ -822,6 +823,16 @@
 															{tab.key === 'provisions' ? `Provisions (${prov.total})` : tab.label}
 														</button>
 													{/each}
+													<div class="ml-auto flex items-center gap-1.5 text-[10px]">
+														<span class="px-1 py-0.5 rounded bg-red-50 text-red-700">Duty</span>
+														<span class="px-1 py-0.5 rounded bg-amber-50 text-amber-700"
+															>Responsibility</span
+														>
+														<span class="px-1 py-0.5 rounded bg-blue-50 text-blue-700">Right</span>
+														<span class="px-1 py-0.5 rounded bg-purple-50 text-purple-700"
+															>Power</span
+														>
+													</div>
 												</div>
 
 												<!-- Provisions tab -->
@@ -883,8 +894,9 @@
 																								{/if}
 																							{/each}
 																							{#each p.actors.slice(0, 3) as actor}
+																								{@const ap = actorPillStyle(actor)}
 																								<button
-																									class="px-1 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700"
+																									class="px-1 py-0.5 rounded {ap.bg} {ap.text} hover:opacity-80"
 																									on:click|stopPropagation={() =>
 																										(actorFilter = actor.label)}
 																								>
@@ -935,6 +947,11 @@
 															on:click|stopPropagation
 														>
 															{#each actors as entry}
+																{@const ep = actorPillStyle({
+																	label: entry.actor,
+																	role: entry.category,
+																	position: entry.position
+																})}
 																<button
 																	on:click|stopPropagation={() => {
 																		setDrilldownTab(match.law_name, 'provisions');
@@ -942,7 +959,7 @@
 																	}}
 																	class="w-full text-left flex items-center gap-3 px-3 py-2 rounded border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50 text-xs transition-colors"
 																>
-																	<span class="font-medium text-gray-700 flex-1">
+																	<span class="font-medium flex-1 {ep.text}">
 																		{entry.actor}
 																	</span>
 																	<div class="flex gap-1">

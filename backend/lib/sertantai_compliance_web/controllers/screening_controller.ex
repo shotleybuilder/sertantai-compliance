@@ -1157,4 +1157,131 @@ defmodule SertantaiComplianceWeb.ScreeningController do
   end
 
   defp actor_labels_from_db(col1, col2), do: actor_labels_from_db([col1, col2])
+
+  # ── Provisions ─────────────────────────────────────────────────
+
+  @doc "GET /api/screening/laws/:law_name/provisions — provisions for a specific law"
+  def provisions(conn, %{"law_name" => law_name}) do
+    # Fetch the compiled applicability tree from the parent law
+    applicability_tree =
+      case Repo.query(
+             "SELECT compiled_applicability FROM legal_register WHERE name = $1",
+             [law_name]
+           ) do
+        {:ok, %{rows: [[tree]]}} -> decode_jsonb(tree)
+        _ -> nil
+      end
+
+    {:ok, %{rows: rows, columns: columns}} =
+      Repo.query(
+        """
+        SELECT section_id, law_name, position, sort_key,
+               section_type, hierarchy_path, depth,
+               provision, paragraph, sub_paragraph, schedule,
+               text, extent_code,
+               drrp_types, governed_actors, government_actors, actors,
+               duty_family, duty_sub_type, clause_refined,
+               significance_overall, significance_gravity,
+               significance_strength, significance_scope_duty_bearer,
+               amendment_count
+        FROM legal_articles
+        WHERE law_name = $1
+          AND section_type IN ('section', 'sub_section', 'article', 'sub_article', 'paragraph', 'sub_paragraph', 'schedule')
+        ORDER BY position
+        """,
+        [law_name]
+      )
+
+    articles =
+      Enum.map(rows, fn row ->
+        record = Enum.zip(columns, row) |> Map.new()
+
+        %{
+          section_id: record["section_id"],
+          law_name: record["law_name"],
+          position: record["position"],
+          sort_key: record["sort_key"],
+          section_type: record["section_type"],
+          hierarchy_path: record["hierarchy_path"],
+          depth: record["depth"],
+          provision: record["provision"],
+          paragraph: record["paragraph"],
+          sub_paragraph: record["sub_paragraph"],
+          schedule: record["schedule"],
+          text: record["text"],
+          extent_code: record["extent_code"],
+          drrp_types: record["drrp_types"] || [],
+          governed_actors: record["governed_actors"] || [],
+          government_actors: record["government_actors"] || [],
+          actors: decode_jsonb(record["actors"]) || [],
+          duty_family: record["duty_family"],
+          duty_sub_type: record["duty_sub_type"],
+          clause_refined: record["clause_refined"],
+          significance_overall: record["significance_overall"],
+          significance_gravity: record["significance_gravity"],
+          significance_strength: record["significance_strength"],
+          significance_scope: record["significance_scope_duty_bearer"],
+          amendment_count: record["amendment_count"] || 0
+        }
+      end)
+
+    # Summary counts by DRRP type
+    drrp_counts =
+      articles
+      |> Enum.flat_map(fn a -> a.drrp_types end)
+      |> Enum.frequencies()
+
+    json(conn, %{
+      law_name: law_name,
+      provisions: articles,
+      total: length(articles),
+      drrp_counts: drrp_counts,
+      applicability_tree: applicability_tree
+    })
+  end
+
+  @doc "GET /api/screening/definitions?term=:term — legal definitions for a term across laws"
+  def definitions(conn, %{"term" => term}) do
+    normalized = String.downcase(String.trim(term))
+
+    {:ok, %{rows: rows, columns: columns}} =
+      Repo.query(
+        """
+        SELECT ld.term, ld.definition, ld.scope, ld.section_id,
+               ld.references_other_law, ld.law_name,
+               lr.title_en, lr.year
+        FROM legislative_definitions ld
+        LEFT JOIN legal_register lr ON lr.name = ld.law_name
+        WHERE ld.term = $1
+        ORDER BY lr.year DESC NULLS LAST, ld.law_name
+        """,
+        [normalized]
+      )
+
+    definitions =
+      Enum.map(rows, fn row ->
+        record = Enum.zip(columns, row) |> Map.new()
+
+        %{
+          term: record["term"],
+          definition: record["definition"],
+          scope: record["scope"],
+          section_id: record["section_id"],
+          references_other_law: record["references_other_law"] || false,
+          law_name: record["law_name"],
+          law_title: record["title_en"],
+          year: record["year"]
+        }
+      end)
+
+    json(conn, %{
+      term: normalized,
+      definitions: definitions,
+      count: length(definitions)
+    })
+  end
+
+  def definitions(conn, _params) do
+    conn |> put_status(400) |> json(%{error: "term parameter is required"})
+  end
 end

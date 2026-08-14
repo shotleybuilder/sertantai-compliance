@@ -21,6 +21,7 @@ defmodule SertantaiCompliance.Api do
     resource(SertantaiCompliance.Legal.SecondarySource)
     resource(SertantaiCompliance.Legal.SecondarySourceProvision)
     resource(SertantaiCompliance.Legal.SourceLink)
+    resource(SertantaiCompliance.Legal.LegislativeDefinition)
 
     # Customer-facing resources will be added here (read-write)
   end

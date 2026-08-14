@@ -11,6 +11,8 @@
 		type Vocabulary,
 		type ConditionalQuestion
 	} from '$lib/api/screening';
+	import { actorToTerm, tagToTerm } from '$lib/api/definitions';
+	import DefinitionPanel from '$lib/components/DefinitionPanel.svelte';
 
 	// ── Step definitions ────────────────────────────────────────────
 
@@ -91,6 +93,17 @@
 	let saving = false;
 	let saveError: string | null = null;
 	let lastSaved: Date | null = null;
+
+	let definitionTerm: string | null = null;
+
+	function lookupDefinition(profileKey: string, tag: string) {
+		// Actor steps use actor label prefixes; fitness steps use snake_case
+		if (profileKey === 'governed_actors' || profileKey === 'government_actors') {
+			definitionTerm = actorToTerm(tag);
+		} else {
+			definitionTerm = tagToTerm(tag);
+		}
+	}
 
 	let profile: ScreeningProfile = {
 		regions: [],
@@ -536,12 +549,34 @@
 							{/if}
 							<div class="flex flex-wrap gap-2">
 								{#each options as tag (profileKey + ':' + tag)}
-									<button
-										on:click={() => toggleTag(profileKey, tag)}
-										class="{TAG_BASE} {selected.includes(tag) ? TAG_ACTIVE : TAG_INACTIVE}"
+									<span
+										class="inline-flex items-center {TAG_BASE} {selected.includes(tag)
+											? TAG_ACTIVE
+											: TAG_INACTIVE}"
 									>
-										{formatTag(tag)}
-									</button>
+										<button on:click={() => toggleTag(profileKey, tag)} class="pr-0.5">
+											{formatTag(tag)}
+										</button>
+										<button
+											on:click|stopPropagation={() => lookupDefinition(profileKey, tag)}
+											class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
+											title="Legal definition"
+										>
+											<svg
+												class="w-3.5 h-3.5"
+												fill="none"
+												viewBox="0 0 24 24"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+												/>
+											</svg>
+										</button>
+									</span>
 								{/each}
 							</div>
 
@@ -750,3 +785,5 @@
 		</div>
 	{/if}
 </div>
+
+<DefinitionPanel term={definitionTerm} onClose={() => (definitionTerm = null)} />

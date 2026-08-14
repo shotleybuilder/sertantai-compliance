@@ -63,6 +63,12 @@ defmodule SertantaiComplianceWeb.Router do
     # Debug (dev only)
     post "/debug-dump", ScreeningController, :debug_dump
 
+    # Provisions (drill-down)
+    get "/laws/:law_name/provisions", ScreeningController, :provisions
+
+    # Definitions (legal term interpretations)
+    get "/definitions", ScreeningController, :definitions
+
     # Compliance metrics
     get "/compliance-metrics", ScreeningController, :compliance_metrics
   end

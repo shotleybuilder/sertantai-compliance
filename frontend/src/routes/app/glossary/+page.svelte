@@ -2,14 +2,16 @@
 	import { browser } from '$app/environment';
 	import { onMount, onDestroy } from 'svelte';
 	import { GridLite } from '@shotleybuilder/svelte-gridlite-kit';
+
+	// SvelteKit passes params as a prop — export const for external reference only
+	export let params: Record<string, string> = {};
 	import '@shotleybuilder/svelte-gridlite-kit/styles';
 	import type {
 		ColumnConfig,
 		GridState,
 		FilterCondition
 	} from '@shotleybuilder/svelte-gridlite-kit';
-	import { createTanStackDBAdapter } from '@shotleybuilder/gridlite-adapter-tanstack-db';
-	import { createPGLiteCollection } from '$lib/pglite/collection-bridge';
+	import { createPGLiteAdapter } from '@shotleybuilder/gridlite-adapter-pglite';
 	import {
 		DEFINITIONS_COLUMN_METADATA,
 		DEFINITIONS_DEFAULT_VISIBLE,
@@ -42,7 +44,7 @@
 	let db: PGLiteWithExtensions | null = null;
 	let ready = false;
 	let gridRef: GridLite;
-	let adapter: ReturnType<typeof createTanStackDBAdapter> | null = null;
+	let adapter: ReturnType<typeof createPGLiteAdapter> | null = null;
 	let error: string | null = null;
 	let viewStore: ViewStoreBundle | null = null;
 	let showSaveModal = false;
@@ -197,12 +199,7 @@
 			db = await getPglite();
 			await runViewMigrations(db as any);
 			viewStore = initViewStore(db as any, 'glossary');
-			const collection = createPGLiteCollection({
-				db,
-				query: DEFINITIONS_SQL,
-				id: 'glossary-definitions'
-			});
-			adapter = createTanStackDBAdapter({ collection, columns: DEFINITIONS_COLUMN_METADATA });
+			adapter = createPGLiteAdapter({ db: db as any, query: DEFINITIONS_SQL });
 			await adapter.init();
 			ready = true;
 			setTimeout(() => seedGlossaryViews(), 100);

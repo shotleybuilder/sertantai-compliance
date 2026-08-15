@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 
 	// SvelteKit passes params as a prop — export const for external reference only
-	export const params: Record<string, string> = {};
+	export let params: Record<string, string> = {};
 
 	const navItems = [{ href: '/browse', label: 'Browse Laws', exact: false }];
 

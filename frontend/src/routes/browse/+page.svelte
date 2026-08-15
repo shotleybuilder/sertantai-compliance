@@ -10,8 +10,7 @@
 		SortConfig,
 		GroupConfig
 	} from '@shotleybuilder/svelte-gridlite-kit';
-	import { createTanStackDBAdapter } from '@shotleybuilder/gridlite-adapter-tanstack-db';
-	import { createPGLiteCollection } from '$lib/pglite/collection-bridge';
+	import { createPGLiteAdapter } from '@shotleybuilder/gridlite-adapter-pglite';
 	import { UK_LRT_COLUMN_METADATA } from '$lib/pglite/uk-lrt-columns';
 	import {
 		initViewStore,
@@ -37,7 +36,7 @@
 	import { getPglite, type PGLiteWithExtensions } from '$lib/pglite/client';
 
 	// SvelteKit passes params as a prop — export const for external reference only
-	export const params: Record<string, string> = {};
+	export let params: Record<string, string> = {};
 
 	// Columns queried from PGLite for the browse page
 	const BROWSE_COLUMNS = [
@@ -76,7 +75,7 @@
 	let db: PGLiteWithExtensions | null = null;
 	let ready = false;
 	let gridRef: GridLite;
-	let adapter: ReturnType<typeof createTanStackDBAdapter> | null = null;
+	let adapter: ReturnType<typeof createPGLiteAdapter> | null = null;
 	let error: string | null = null;
 
 	// View store (initialized after PGLite is ready)
@@ -900,12 +899,7 @@
 			db = await getPglite();
 			await runViewMigrations(db as any);
 			viewStore = initViewStore(db as any, 'browse');
-			const collection = createPGLiteCollection({
-				db,
-				query: BROWSE_SQL,
-				id: 'browse-uk-lrt'
-			});
-			adapter = createTanStackDBAdapter({ collection, columns: browseColumnMetadata });
+			adapter = createPGLiteAdapter({ db: db as any, query: BROWSE_SQL });
 			await adapter.init();
 			ready = true;
 			// Wait for next tick so GridLite renders, then seed views

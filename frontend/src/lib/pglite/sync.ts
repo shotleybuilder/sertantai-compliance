@@ -311,12 +311,16 @@ export async function startSync(): Promise<void> {
 		const orgId = getOrgIdFromToken();
 		if (orgId) {
 			try {
-				// Clear stale applicabilities subscription
+				// Ensure clean state for applicabilities sync.
+				// Previous versions incorrectly called deleteSubscription on every load,
+				// which removed pglite-sync metadata but left stale rows. Clear both
+				// so the shape can re-sync cleanly without duplicate key errors.
 				try {
 					await pg.electric.deleteSubscription(`org-applicabilities-${orgId}`);
 				} catch {
 					// No subscription to delete
 				}
+				await pg.exec('DELETE FROM org_applicabilities');
 
 				const oaResult = await pg.electric.syncShapeToTable({
 					shape: {

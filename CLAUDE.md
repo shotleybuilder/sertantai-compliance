@@ -32,6 +32,40 @@
 - User authentication (comes from sertantai-auth)
 - Organization management (comes from hub)
 
+## Local-First Architecture: Electric + PGLite (No TanStack DB)
+
+### CRITICAL: Do NOT re-introduce TanStack DB
+
+The frontend uses a local-first architecture for the browse and glossary pages:
+
+```
+Electric (server) → PGLite (IndexedDB, WASM Postgres) → gridlite-adapter-pglite → GridLite UI
+```
+
+**Do NOT add `@tanstack/db` or `gridlite-adapter-tanstack-db` to this project.** TanStack DB was evaluated twice (sertantai-legal #38, then #66) and removed both times:
+
+1. **Mar 2026**: Removed because TanStack DB's in-memory collections caused browser crashes with 19K+ records (~48MB JS heap). Replaced with PGLite.
+2. **Aug 2026**: Removed again after being re-introduced via GridLite 0.5 adapter migration. The `collection-bridge.ts` pattern duplicated all data (once in PGLite/IndexedDB, again in TanStack DB's in-memory Map), adding ~50-100MB heap for 49K definitions.
+
+### Why PGLite adapter is sufficient
+
+- PGLite IS a real SQL database (PostgreSQL 18 via WASM) — it handles filtering, sorting, pagination, and grouping at the SQL level with indexes
+- `gridlite-adapter-pglite` provides live queries via PGLite's `live.query()` extension — reactive updates when Electric syncs new data
+- No in-memory duplication — data lives in IndexedDB, queries are paginated
+- `relaxedDurability: true` gives fast query responses while flushing to IDB async
+
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/lib/pglite/client.ts` | PGLite singleton (IDB-backed, versioned name) |
+| `frontend/src/lib/pglite/sync.ts` | Electric shape subscriptions (laws, definitions, applicabilities) |
+| `frontend/src/lib/pglite/schema.sql.ts` | CREATE TABLE statements, schema versioning |
+
+### PGLite IDB versioning
+
+PGLite breaking upgrades (e.g. 0.3→0.5) change the IndexedDB format. The IDB name includes `DB_VERSION` (in `client.ts`) — bump it when upgrading PGLite across breaking versions. Old databases are orphaned; fresh data syncs from Electric on first load.
+
 ## Database & Migration Strategy
 
 ### CRITICAL: Shared Database Pattern

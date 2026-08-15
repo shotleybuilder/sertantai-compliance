@@ -52,10 +52,8 @@
 		"@electric-sql/pglite": "^0.5.5",
 		"@electric-sql/pglite-sync": "^0.6.6",
 		"@shotleybuilder/gridlite-adapter-pglite": "^0.7.1",
-		"@shotleybuilder/gridlite-adapter-tanstack-db": "^0.8.0",
 		"@shotleybuilder/svelte-gridlite-kit": "^0.7.1",
 		"@shotleybuilder/svelte-gridlite-views": "^0.2.1",
-		"@tanstack/db": "^0.6.0",
 		"@tanstack/svelte-query": "^5.90.2",
 		"date-fns": "^4.1.0"
 	}

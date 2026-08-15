@@ -8,6 +8,9 @@ export default defineConfig({
 		port: 5176
 	},
 	optimizeDeps: {
-		exclude: ['@electric-sql/pglite']
+		exclude: ['@electric-sql/pglite'],
+		esbuildOptions: {
+			sourcemap: false
+		}
 	}
 });

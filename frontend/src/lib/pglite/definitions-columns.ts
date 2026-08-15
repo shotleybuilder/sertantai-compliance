@@ -1,8 +1,8 @@
 /**
  * definitions-columns.ts — Column metadata for legislative definitions.
  *
- * Used by gridlite-adapter-tanstack-db which cannot auto-introspect
- * column types (unlike the PGLite adapter which reads information_schema).
+ * Used by GridLite config for column display (headers, widths) and
+ * as a reference for the PGLite adapter's column type mapping.
  */
 
 import type { ColumnMetadata } from '@shotleybuilder/svelte-gridlite-kit/types';

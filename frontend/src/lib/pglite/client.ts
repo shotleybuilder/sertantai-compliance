@@ -8,6 +8,10 @@
  * The IndexedDB store is scoped per user (from JWT sub claim) to prevent
  * collisions when multiple users share the same browser origin (#106).
  *
+ * IDB name includes a version prefix (DB_VERSION) so that breaking PGLite
+ * upgrades (e.g. 0.3→0.5) get a fresh database instead of hanging on
+ * an incompatible format.
+ *
  * NOTE: Must only be called in the browser (SvelteKit client-side code).
  */
 
@@ -22,6 +26,12 @@ export type PGLiteWithExtensions = PGlite & {
 	live: LiveNamespace;
 	electric: SyncNamespaceObj;
 };
+
+/**
+ * Bump this when PGLite has a breaking IDB format change.
+ * Old databases are left orphaned (browser will GC or user can clear storage).
+ */
+const DB_VERSION = 2; // v1 = PGLite 0.3, v2 = PGLite 0.5
 
 let pgliteInstance: PGLiteWithExtensions | null = null;
 let pglitePromise: Promise<PGLiteWithExtensions> | null = null;
@@ -61,7 +71,7 @@ export async function getPglite(): Promise<PGLiteWithExtensions> {
 	}
 
 	const slug = getUserSlug();
-	const dbName = `idb://sertantai-legal-${slug}`;
+	const dbName = `idb://sertantai-v${DB_VERSION}-${slug}`;
 
 	// If user changed (different slug), close old instance and create new
 	if (pgliteInstance && currentDbName && currentDbName !== dbName) {
@@ -81,38 +91,13 @@ export async function getPglite(): Promise<PGLiteWithExtensions> {
 	// Prevent concurrent initialization
 	if (pglitePromise) return pglitePromise;
 
-	pglitePromise = initWithRetry(dbName);
+	pglitePromise = createInstance(dbName);
 
 	return pglitePromise;
 }
 
-async function initWithRetry(dbName: string): Promise<PGLiteWithExtensions> {
-	try {
-		return await createInstance(dbName);
-	} catch (err) {
-		// PGLite 0.3→0.5 upgrade: incompatible IndexedDB format — nuke and retry
-		console.warn(`[PGLite] Init failed, clearing stale IndexedDB and retrying:`, err);
-		const idbName = dbName.replace('idb://', '');
-		try {
-			// Delete all IndexedDB databases matching this name prefix
-			const dbs = await indexedDB.databases();
-			for (const db of dbs) {
-				if (db.name && db.name.includes(idbName)) {
-					indexedDB.deleteDatabase(db.name);
-					console.log(`[PGLite] Deleted stale IDB: ${db.name}`);
-				}
-			}
-		} catch {
-			// indexedDB.databases() not supported in all browsers — try direct delete
-			indexedDB.deleteDatabase(idbName);
-		}
-		// Brief pause for IDB cleanup to complete
-		await new Promise((r) => setTimeout(r, 200));
-		return createInstance(dbName);
-	}
-}
-
 async function createInstance(dbName: string): Promise<PGLiteWithExtensions> {
+	console.log(`[PGLite] Creating instance: ${dbName}`);
 	const pg = await PGlite.create(dbName, {
 		extensions: {
 			live,

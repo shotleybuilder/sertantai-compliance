@@ -3,8 +3,9 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { GridLite } from '@shotleybuilder/svelte-gridlite-kit';
 
-	// SvelteKit passes params as a prop — export const for external reference only
-	export let params: Record<string, string> = {};
+	export let params: Record<string, string> = {}; // SvelteKit always passes this
+	$: void params;
+
 	import '@shotleybuilder/svelte-gridlite-kit/styles';
 	import type {
 		ColumnConfig,
@@ -50,16 +51,24 @@
 	let showSaveModal = false;
 	let capturedConfig: ViewConfig | null = null;
 
-	// Column config for GridLite
+	// Column config for GridLite — user-friendly headers
+	const COLUMN_HEADERS: Record<string, string> = {
+		id: 'ID',
+		term: 'Term',
+		term_welsh: 'Welsh Term',
+		definition: 'Definition',
+		law_name: 'Source Law',
+		section_id: 'Section',
+		scope: 'Scope',
+		references_other_law: 'Cross-Reference',
+		source: 'Source',
+		inserted_at: 'Created',
+		updated_at: 'Updated'
+	};
+
 	const columns: ColumnConfig[] = DEFINITIONS_COLUMN_METADATA.map((col) => ({
 		name: col.name,
-		header: col.name
-			.replace(/_/g, ' ')
-			.replace(/\b\w/g, (c: string) => c.toUpperCase())
-			.replace('Law Name', 'Source Law')
-			.replace('Section Id', 'Section')
-			.replace('References Other Law', 'Cross-Ref')
-			.replace('Term Welsh', 'Welsh Term'),
+		label: COLUMN_HEADERS[col.name] ?? col.name,
 		dataType: col.dataType as 'text' | 'number' | 'date' | 'boolean',
 		width:
 			col.name === 'definition'
@@ -120,6 +129,18 @@
 
 		const { defaultViewId } = await seedDefaults(defaultViews, currentViews, actions);
 
+		// Prune persisted views that no longer exist in code defaults
+		const defaultNames = new Set(defaultViews.map((v) => v.name));
+		for (const view of currentViews) {
+			if (!defaultNames.has(view.name)) {
+				try {
+					await actions.delete(view.id);
+				} catch {
+					/* already gone */
+				}
+			}
+		}
+
 		// Seed groups and assign views to groups
 		let currentGroups: ViewGroup[] = [];
 		const grpUnsub = grpStore.subscribe((g: ViewGroup[]) => {
@@ -145,13 +166,30 @@
 		if (defaultViewId) {
 			viewStore.activeViewId.set(defaultViewId);
 			const dv = currentViews.find((v) => v.id === defaultViewId);
-			if (dv) switchToView(dv.name, dv.config);
+			if (dv) {
+				switchToView(dv.name, dv.config);
+				applyViewToGrid(dv);
+			}
 		}
+	}
+
+	function applyViewToGrid(view: SavedView) {
+		if (!gridRef) return;
+		const cfg = view.config;
+		gridRef.applyConfig({
+			filters: cfg.filters as FilterCondition[],
+			filterLogic: cfg.filterLogic,
+			sorting: cfg.sorting,
+			grouping: cfg.grouping,
+			columnVisibility: cfg.columnVisibility,
+			columnOrder: cfg.columnOrder
+		});
 	}
 
 	function handleViewSelected(e: CustomEvent<{ view: SavedView }>) {
 		const view = e.detail.view;
 		switchToView(view.name, view.config);
+		applyViewToGrid(view);
 	}
 
 	function handleSaveView() {
@@ -262,7 +300,7 @@
 			</button>
 			<div>
 				<h1 class="text-xl font-bold text-gray-900">Legal Glossary</h1>
-				<p class="text-sm text-gray-600">Browse 34,000+ legal definitions from 1,987 UK laws.</p>
+				<p class="text-sm text-gray-600">Browse legal definitions extracted from UK legislation.</p>
 			</div>
 		</div>
 
@@ -358,3 +396,10 @@
 {#if showSaveModal && viewStore && capturedConfig}
 	<SaveViewModal {viewStore} config={capturedConfig} on:close={() => (showSaveModal = false)} />
 {/if}
+
+<style>
+	/* Widen row detail labels to prevent overlap on longer field names */
+	:global(.gridlite-row-detail-field dt) {
+		width: 160px;
+	}
+</style>

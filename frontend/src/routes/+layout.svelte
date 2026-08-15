@@ -5,8 +5,8 @@
 	import { browser } from '$app/environment';
 	import { adminAuth } from '$lib/stores/auth';
 
-	// SvelteKit passes params as a prop — export const for external reference only
-	export let params: Record<string, string> = {};
+	export let params: Record<string, string> = {}; // SvelteKit always passes this
+	$: void params;
 
 	// Restore auth from localStorage at module scope — runs during script
 	// initialization BEFORE any child onMount callbacks fire.

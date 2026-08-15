@@ -2,8 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 
-	// SvelteKit passes params as a prop — export const for external reference only
-	export let params: Record<string, string> = {};
+	export let params: Record<string, string> = {}; // SvelteKit always passes this
+	$: void params;
 
 	onMount(() => {
 		goto('/browse', { replaceState: true });

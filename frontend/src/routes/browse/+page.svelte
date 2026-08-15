@@ -35,8 +35,8 @@
 	import { startSync, syncStatus } from '$lib/pglite/sync';
 	import { getPglite, type PGLiteWithExtensions } from '$lib/pglite/client';
 
-	// SvelteKit passes params as a prop — export const for external reference only
-	export let params: Record<string, string> = {};
+	export let params: Record<string, string> = {}; // SvelteKit always passes this
+	$: void params;
 
 	// Columns queried from PGLite for the browse page
 	const BROWSE_COLUMNS = [

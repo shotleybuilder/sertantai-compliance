@@ -58,12 +58,14 @@ function makeViewConfig(opts: {
 const patternsInLaw: ViewDef[] = [
 	{
 		name: 'All Definitions',
-		description: 'Browse all 34,000+ legal definitions alphabetically',
-		config: makeViewConfig({})
+		description: 'Browse all legal definitions alphabetically',
+		config: makeViewConfig({}),
+		isDefault: true
 	},
 	{
 		name: 'Multi-Definition Terms',
-		description: 'Terms defined differently across multiple laws — highest conflict risk',
+		description:
+			'Definitions grouped by term — groups with 2+ entries have conflicting definitions across laws',
 		config: makeViewConfig({
 			visibleCols: ['term', 'definition', 'law_name', 'scope'],
 			grouping: [{ column: 'term' }],
@@ -74,7 +76,7 @@ const patternsInLaw: ViewDef[] = [
 		name: 'Cross-References',
 		description: 'Definitions that point to another law — dependency chains',
 		config: makeViewConfig({
-			filters: [makeFilter('references_other_law', 'equals', true)],
+			filters: [makeFilter('references_other_law', 'equals', 'true')],
 			visibleCols: ['term', 'definition', 'law_name', 'section_id', 'scope', 'references_other_law']
 		})
 	},
@@ -82,7 +84,7 @@ const patternsInLaw: ViewDef[] = [
 		name: 'Self-Contained',
 		description: 'Foundational definitions with no cross-law dependencies',
 		config: makeViewConfig({
-			filters: [makeFilter('references_other_law', 'equals', false)]
+			filters: [makeFilter('references_other_law', 'equals', 'false')]
 		})
 	},
 	{
@@ -91,14 +93,6 @@ const patternsInLaw: ViewDef[] = [
 		config: makeViewConfig({
 			filters: [makeFilter('scope', 'equals', 'provision')],
 			visibleCols: ['term', 'definition', 'law_name', 'section_id', 'scope']
-		})
-	},
-	{
-		name: 'Recently Updated',
-		description: 'Definitions updated in the last 90 days — change management',
-		config: makeViewConfig({
-			sorting: [{ column: 'updated_at', direction: 'desc' }],
-			visibleCols: ['term', 'definition', 'law_name', 'scope', 'updated_at']
 		})
 	},
 	{
@@ -140,26 +134,12 @@ const metadataViews: ViewDef[] = [
 		})
 	},
 	{
-		name: 'H&S Focus',
-		description: 'Health & safety definitions: hazard, risk, PPE, work equipment',
-		config: makeViewConfig({
-			visibleCols: ['term', 'definition', 'law_name', 'section_id', 'scope']
-		})
-	},
-	{
-		name: 'Environmental Focus',
-		description: 'Environmental management: waste, pollution, emissions, permits',
-		config: makeViewConfig({
-			visibleCols: ['term', 'definition', 'law_name', 'section_id', 'scope']
-		})
-	},
-	{
 		name: '"Employer" Across Regimes',
 		description: 'How "employer" differs between H&S, employment, and environmental law',
 		config: makeViewConfig({
 			filters: [makeFilter('term', 'equals', 'employer')],
 			visibleCols: ['term', 'definition', 'law_name', 'section_id', 'scope'],
-			grouping: [{ column: 'law_name' }]
+			grouping: [{ column: 'definition' }]
 		})
 	}
 ];
@@ -168,36 +148,49 @@ const metadataViews: ViewDef[] = [
 
 const businessViews: ViewDef[] = [
 	{
-		name: 'Core BMS Terms',
-		description: 'Foundational terms for policies, SOPs, and management systems',
-		config: makeViewConfig({
-			visibleCols: ['term', 'definition', 'law_name', 'scope']
-		})
-	},
-	{
-		name: 'New Starter Kit',
-		description: '30 essential terms every compliance team member must know',
-		config: makeViewConfig({
-			visibleCols: ['term', 'definition', 'law_name'],
-			sorting: [{ column: 'term', direction: 'asc' }]
-		})
-	},
-	{
 		name: 'Competent Person Audit',
 		description: 'How "competent person" is defined across all applicable laws',
 		config: makeViewConfig({
-			filters: [makeFilter('term', 'contains', 'competent')],
+			filters: [makeFilter('term', 'equals', 'competent person')],
 			visibleCols: ['term', 'definition', 'law_name', 'section_id', 'scope']
-		})
-	},
-	{
-		name: 'Due Diligence & Governance',
-		description: 'Board-level governance terms: duty holder, responsible person',
-		config: makeViewConfig({
-			visibleCols: ['term', 'definition', 'law_name', 'scope']
 		})
 	}
 ];
+
+// ── Blocked views — waiting on svelte-gridlite-kit#38 (ILIKE + PGLite live queries) ──
+//
+// These views need `contains` filters which break PGLite's live.query() format().
+// Also removed: H&S Focus, Environmental Focus (Section 2) — same blocker.
+//
+// Spec (restore when #38 is fixed):
+//
+// { name: 'Core BMS Terms',
+//   description: 'Foundational terms for policies, SOPs, and management systems',
+//   filters: term contains one of: policy, procedure, risk, hazard, audit, compliance, management system
+//   visibleCols: ['term', 'definition', 'law_name', 'scope'] }
+//
+// { name: 'New Starter Kit',
+//   description: '30 essential terms every compliance team member must know',
+//   filters: term contains common compliance terms (employer, employee, hazard, risk, etc.)
+//   visibleCols: ['term', 'definition', 'law_name'],
+//   sorting: term asc }
+//
+// { name: 'Due Diligence & Governance',
+//   description: 'Board-level governance terms: duty holder, responsible person',
+//   filters: term contains one of: duty, responsible, officer, director, governance
+//   visibleCols: ['term', 'definition', 'law_name', 'scope'] }
+//
+// { name: 'H&S Focus',
+//   description: 'Health & safety definitions filtered by law name containing health, safety, or work',
+//   filters: law_name contains 'health' (or 'safety', 'work')
+//   visibleCols: ['term', 'definition', 'law_name', 'section_id', 'scope'],
+//   grouping: law_name }
+//
+// { name: 'Environmental Focus',
+//   description: 'Environmental definitions filtered by law name containing environment',
+//   filters: law_name contains 'environment'
+//   visibleCols: ['term', 'definition', 'law_name', 'section_id', 'scope'],
+//   grouping: law_name }
 
 export const defaultViews: ViewDef[] = [...patternsInLaw, ...metadataViews, ...businessViews];
 

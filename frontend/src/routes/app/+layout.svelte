@@ -5,8 +5,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { authFetch } from '$lib/api/client';
 
-	// SvelteKit passes params as a prop — export const for external reference only
-	export let params: Record<string, string> = {};
+	export let params: Record<string, string> = {}; // SvelteKit always passes this
+	$: void params;
 
 	const HUB_URL = import.meta.env.VITE_HUB_URL || 'http://localhost:5173';
 	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4004';
@@ -15,6 +15,7 @@
 		{ href: '/app/screening', label: 'Screening' },
 		{ href: '/app/changes', label: 'Changes' },
 		{ href: '/app/profile', label: 'Profile' },
+		{ href: '/app/glossary', label: 'Glossary' },
 		{ href: '/app/activity', label: 'Activity' },
 		{ href: '/app/stats', label: 'Stats' }
 	];

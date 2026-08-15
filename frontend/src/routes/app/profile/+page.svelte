@@ -35,7 +35,7 @@
 		{
 			key: 'people',
 			label: 'People',
-			description: 'Which government bodies or regulators oversee your operations?',
+			description: 'Selecting regulators narrows results to laws actively enforced by these bodies',
 			profileKeys: ['government_actors'],
 			priority: 'recommended'
 		},
@@ -85,42 +85,25 @@
 
 	// ── Org type drill-down (Identity step) ────────────────────────
 
-	type OrgType = 'private' | 'public' | 'supply_chain' | 'individual';
+	type OrgType = 'private' | 'public';
 
 	const ORG_TYPES: {
 		key: OrgType;
 		label: string;
 		description: string;
 		primaryPrefixes: string[];
-		crossCuttingPrefixes: string[];
 	}[] = [
 		{
 			key: 'private',
 			label: 'Private Sector',
-			description: 'Company, employer, manufacturer',
-			primaryPrefixes: ['Org:'],
-			crossCuttingPrefixes: ['SC:', 'Svc:']
+			description: 'PLC, Ltd, Charity, LLP, Partnership',
+			primaryPrefixes: ['Org:']
 		},
 		{
 			key: 'public',
 			label: 'Public Sector',
-			description: 'Government body, authority',
-			primaryPrefixes: ['Gvt:', 'EU:', 'Crown', 'HM '],
-			crossCuttingPrefixes: ['Org:']
-		},
-		{
-			key: 'supply_chain',
-			label: 'Supply Chain',
-			description: 'Contractor, supplier, service provider',
-			primaryPrefixes: ['SC:', 'Svc:'],
-			crossCuttingPrefixes: ['Org:']
-		},
-		{
-			key: 'individual',
-			label: 'Individual',
-			description: 'Employee, worker, self-employed',
-			primaryPrefixes: ['Ind:'],
-			crossCuttingPrefixes: ['Org:']
+			description: 'Government body, authority, regulator',
+			primaryPrefixes: ['Gvt:', 'EU:', 'Crown', 'HM ']
 		}
 	];
 
@@ -211,12 +194,9 @@
 	}
 
 	function deriveOrgType(): OrgType | null {
-		const gov = profile.government_actors;
-		const governed = profile.governed_actors;
-		if (gov.some((a) => matchesAnyPrefix(a, ['Gvt:', 'EU:', 'Crown', 'HM ']))) return 'public';
-		if (governed.some((a) => a.startsWith('SC:') || a.startsWith('Svc:'))) return 'supply_chain';
-		if (governed.some((a) => a.startsWith('Ind:'))) return 'individual';
-		if (governed.some((a) => a.startsWith('Org:'))) return 'private';
+		if (profile.government_actors.some((a) => matchesAnyPrefix(a, ['Gvt:', 'EU:', 'Crown', 'HM '])))
+			return 'public';
+		if (profile.governed_actors.length > 0) return 'private';
 		return null;
 	}
 
@@ -358,54 +338,57 @@
 		if (!selectedOrgType)
 			return {
 				primary: [] as { prefix: string; label: string; actors: string[] }[],
+				orgRoles: [] as string[],
 				crossCutting: [] as string[]
 			};
-
-		const orgTypeDef = ORG_TYPES.find((t) => t.key === selectedOrgType)!;
 
 		// Merge all actors from both vocab lists, deduplicate
 		const allActors = [
 			...new Set([...(vocabulary.governed_actors || []), ...(vocabulary.government_actors || [])])
 		].filter(isValidLabel);
 
-		// Primary: actors matching org type's prefixes
-		const primary = allActors.filter((a) => matchesAnyPrefix(a, orgTypeDef.primaryPrefixes));
-
-		// Group by prefix
-		const groups = new Map<string, string[]>();
-		for (const actor of primary.sort()) {
-			const prefix = getActorPrefix(actor);
-			if (!groups.has(prefix)) groups.set(prefix, []);
-			groups.get(prefix)!.push(actor);
+		if (selectedOrgType === 'public') {
+			// Public: Gvt:*, EU:*, Crown, HM — no extras
+			const pubPrefixes = ['Gvt:', 'EU:', 'Crown', 'HM '];
+			const primary = allActors.filter((a) => matchesAnyPrefix(a, pubPrefixes));
+			const groups = new Map<string, string[]>();
+			for (const actor of primary.sort()) {
+				const prefix = getActorPrefix(actor);
+				if (!groups.has(prefix)) groups.set(prefix, []);
+				groups.get(prefix)!.push(actor);
+			}
+			return {
+				primary: [...groups.entries()].map(([prefix, actors]) => ({
+					prefix,
+					label: PREFIX_LABELS[prefix] || prefix,
+					actors
+				})),
+				orgRoles: [],
+				crossCutting: []
+			};
 		}
 
-		const primaryGroups = [...groups.entries()].map(([prefix, actors]) => ({
-			prefix,
-			label: PREFIX_LABELS[prefix] || prefix,
-			actors
-		}));
+		// Private Sector: Org:* primary, Ind:* org roles, everything else cross-cutting
+		const primary = allActors.filter((a) => a.startsWith('Org:'));
+		const primaryGroups =
+			primary.length > 0 ? [{ prefix: 'Org:', label: 'Organisation', actors: primary.sort() }] : [];
 
-		// Cross-cutting: explicitly listed prefixes + actors not in any org type's primary
-		const allPrimaryPrefixes = ORG_TYPES.flatMap((t) => t.primaryPrefixes);
+		const orgRoles = allActors.filter((a) => a.startsWith('Ind:')).sort();
+
+		const govPrefixes = ['Gvt:', 'EU:', 'Crown', 'HM '];
 		const crossActors = allActors
-			.filter((a) => {
-				if (matchesAnyPrefix(a, orgTypeDef.primaryPrefixes)) return false;
-				if (matchesAnyPrefix(a, orgTypeDef.crossCuttingPrefixes)) return true;
-				return !matchesAnyPrefix(a, allPrimaryPrefixes);
-			})
+			.filter(
+				(a) => !a.startsWith('Org:') && !a.startsWith('Ind:') && !matchesAnyPrefix(a, govPrefixes)
+			)
 			.sort();
 
-		return { primary: primaryGroups, crossCutting: crossActors };
+		return { primary: primaryGroups, orgRoles, crossCutting: crossActors };
 	})();
 
 	$: identitySelectedCount = (() => {
 		if (!selectedOrgType) return 0;
-		const orgTypeDef = ORG_TYPES.find((t) => t.key === selectedOrgType)!;
-		const allPrefixes = [...orgTypeDef.primaryPrefixes, ...orgTypeDef.crossCuttingPrefixes];
-		return [
-			...profile.governed_actors.filter((a) => matchesAnyPrefix(a, allPrefixes)),
-			...profile.government_actors.filter((a) => matchesAnyPrefix(a, allPrefixes))
-		].length;
+		if (selectedOrgType === 'public') return profile.government_actors.length;
+		return profile.governed_actors.length;
 	})();
 
 	// ── Completeness ────────────────────────────────────────────────
@@ -569,6 +552,10 @@
 		await doSave();
 		if (currentStep < TOTAL_STEPS) {
 			currentStep++;
+			// Skip People step for Public Sector — they ARE government
+			if (STEPS[currentStep]?.key === 'people' && selectedOrgType === 'public') {
+				currentStep++;
+			}
 			pushStepToHistory(currentStep);
 		}
 	}
@@ -576,6 +563,10 @@
 	function prevStep() {
 		if (currentStep > 0) {
 			currentStep--;
+			// Skip People step for Public Sector going back too
+			if (STEPS[currentStep]?.key === 'people' && selectedOrgType === 'public') {
+				currentStep--;
+			}
 			pushStepToHistory(currentStep);
 		}
 	}
@@ -728,14 +719,14 @@
 
 					{#if step.key === 'identity'}
 						<!-- Org type progressive drill-down -->
-						<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+						<div class="grid grid-cols-2 gap-3 mb-6">
 							{#each ORG_TYPES as orgType}
 								<button
 									on:click={() => {
 										selectedOrgType = orgType.key;
 										showCrossCutting = false;
 									}}
-									class="p-3 rounded-lg border-2 text-left transition-colors
+									class="p-4 rounded-lg border-2 text-left transition-colors
 										{selectedOrgType === orgType.key
 										? 'border-emerald-500 bg-emerald-50'
 										: 'border-gray-200 hover:border-gray-300 bg-white'}"
@@ -747,6 +738,7 @@
 						</div>
 
 						{#if selectedOrgType}
+							<!-- Primary actors -->
 							{#each identityActors.primary as group}
 								{#if identityActors.primary.length > 1}
 									<div class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 mt-4">
@@ -755,7 +747,9 @@
 								{/if}
 								<div class="flex flex-wrap gap-2">
 									{#each group.actors as tag (tag)}
-										{@const selected = isIdentityActorSelected(tag)}
+										{@const selected =
+											(profile.governed_actors || []).includes(tag) ||
+											(profile.government_actors || []).includes(tag)}
 										<span
 											class="inline-flex items-center {TAG_BASE} {selected
 												? TAG_ACTIVE
@@ -788,7 +782,47 @@
 								</div>
 							{/each}
 
-							<!-- Cross-cutting roles -->
+							<!-- Roles within your organisation (Ind:*) — Private Sector only -->
+							{#if identityActors.orgRoles.length > 0}
+								<div class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 mt-6">
+									Roles within your organisation
+								</div>
+								<div class="flex flex-wrap gap-2">
+									{#each identityActors.orgRoles as tag (tag)}
+										{@const selected = (profile.governed_actors || []).includes(tag)}
+										<span
+											class="inline-flex items-center {TAG_BASE} {selected
+												? TAG_ACTIVE
+												: TAG_INACTIVE}"
+										>
+											<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
+												{stripPrefix(tag)}
+											</button>
+											<button
+												on:click|stopPropagation={() => lookupDefinition('governed_actors', tag)}
+												class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
+												title="Legal definition"
+											>
+												<svg
+													class="w-3.5 h-3.5"
+													fill="none"
+													viewBox="0 0 24 24"
+													stroke="currentColor"
+													stroke-width="2"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+													/>
+												</svg>
+											</button>
+										</span>
+									{/each}
+								</div>
+							{/if}
+
+							<!-- Cross-cutting roles — Private Sector only -->
 							{#if identityActors.crossCutting.length > 0}
 								<div class="mt-6 pt-4 border-t border-gray-100">
 									<button
@@ -809,14 +843,14 @@
 									{#if showCrossCutting}
 										<div class="flex flex-wrap gap-2 mt-3">
 											{#each identityActors.crossCutting as tag (tag)}
-												{@const selected = isIdentityActorSelected(tag)}
+												{@const selected = (profile.governed_actors || []).includes(tag)}
 												<span
 													class="inline-flex items-center {TAG_BASE} {selected
 														? TAG_ACTIVE
 														: TAG_INACTIVE}"
 												>
 													<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
-														{formatTag(tag)}
+														{stripPrefix(tag)}
 													</button>
 													<button
 														on:click|stopPropagation={() =>

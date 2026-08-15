@@ -246,12 +246,66 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
 
   defp expand_codes(_dimension, codes), do: codes
 
+  # ── Match confidence heuristic ──────────────────────────────────
+
+  # Computes confidence for a matching Match node based on how specifically
+  # the profile's codes matched the node's codes.
+  #
+  # Two factors:
+  #   1. Specificity: direct match (1.0) vs ancestor/hierarchy match (0.5)
+  #   2. Overlap: what fraction of the node's codes did the profile match?
+  #
+  # Returns a float in (0, 1.0].
+  defp compute_match_confidence(dim, node_codes, profile) do
+    raw_profile_codes = Map.get(profile, dim, [])
+    expanded_profile_codes = expand_codes(dim, raw_profile_codes)
+
+    # Which node codes matched, and how?
+    {direct_count, ancestor_count} =
+      Enum.reduce(node_codes, {0, 0}, fn code, {direct, ancestor} ->
+        cond do
+          code in raw_profile_codes -> {direct + 1, ancestor}
+          code in expanded_profile_codes -> {direct, ancestor + 1}
+          true -> {direct, ancestor}
+        end
+      end)
+
+    total_matched = direct_count + ancestor_count
+
+    # Specificity factor: [0.75, 1.0]
+    specificity =
+      if total_matched > 0 do
+        raw = (direct_count + 0.5 * ancestor_count) / total_matched
+        0.5 + 0.5 * raw
+      else
+        1.0
+      end
+
+    # Overlap factor: [0.4, 1.0]
+    total_node_codes = length(node_codes)
+
+    overlap =
+      if total_node_codes > 0 do
+        0.4 + 0.6 * (total_matched / total_node_codes)
+      else
+        1.0
+      end
+
+    Float.round(specificity * overlap, 4)
+  end
+
   # ── Node evaluation ──────────────────────────────────────────────
 
   defp eval_node(%{"op" => "Match", "dimension" => dim, "codes" => codes} = node, profile) do
     customer_codes = expand_codes(dim, Map.get(profile, dim, []))
     applies = Enum.any?(codes, &(&1 in customer_codes))
-    confidence = Map.get(node, "confidence", 1.0) || 1.0
+
+    confidence =
+      case Map.get(node, "confidence") do
+        c when is_number(c) and c > 0 -> c
+        _ -> if applies, do: compute_match_confidence(dim, codes, profile), else: 1.0
+      end
+
     {applies, confidence}
   end
 
@@ -319,7 +373,12 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
     customer_codes = expand_codes(dim, Map.get(profile, dim, []))
     matched = Enum.filter(codes, &(&1 in customer_codes))
     applies = matched != []
-    confidence = Map.get(node, "confidence", 1.0) || 1.0
+
+    confidence =
+      case Map.get(node, "confidence") do
+        c when is_number(c) and c > 0 -> c
+        _ -> if applies, do: compute_match_confidence(dim, codes, profile), else: 1.0
+      end
 
     reasons =
       if applies do

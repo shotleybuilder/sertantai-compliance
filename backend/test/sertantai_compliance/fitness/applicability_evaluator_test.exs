@@ -24,13 +24,14 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluatorTest do
       result = ApplicabilityEvaluator.evaluate_with_reasons(tree, profile)
 
       assert result.applies == true
-      assert result.confidence == 1.0
+      # Heuristic: 1 of 2 codes matched directly → overlap = 0.4 + 0.6*(1/2) = 0.7
+      assert result.confidence == 0.7
       assert length(result.reasons) == 1
 
       [reason] = result.reasons
       assert reason.dimension == "personal"
       assert reason.matched_codes == ["employer"]
-      assert reason.node_confidence == 1.0
+      assert reason.node_confidence == 0.7
       assert result.unmatched_dimensions == []
     end
 
@@ -377,6 +378,144 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluatorTest do
       assert result.applies == false
       assert result.confidence == 0.0
       assert result.reasons == []
+    end
+  end
+
+  # ── confidence heuristic ──────────────────────────────────────
+
+  describe "confidence heuristic" do
+    test "direct match on single code gives 1.0" do
+      tree = %{"op" => "Match", "dimension" => "personal", "codes" => ["employer"]}
+      profile = %{"personal" => ["employer"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      assert result.confidence == 1.0
+    end
+
+    test "direct match on 1 of 2 codes gives 0.7" do
+      tree = %{"op" => "Match", "dimension" => "personal", "codes" => ["employer", "contractor"]}
+      profile = %{"personal" => ["employer"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      assert result.confidence == 0.7
+    end
+
+    test "direct match on all of 2 codes gives 1.0" do
+      tree = %{"op" => "Match", "dimension" => "personal", "codes" => ["employer", "contractor"]}
+      profile = %{"personal" => ["employer", "contractor"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      assert result.confidence == 1.0
+    end
+
+    test "direct match on 1 of 5 codes" do
+      tree = %{
+        "op" => "Match",
+        "dimension" => "personal",
+        "codes" => ["employer", "contractor", "manufacturer", "supplier", "importer"]
+      }
+
+      profile = %{"personal" => ["employer"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      # overlap = 0.4 + 0.6*(1/5) = 0.52, specificity = 1.0
+      assert_in_delta result.confidence, 0.52, 0.01
+    end
+
+    test "territorial ancestor match on single code gives 0.75" do
+      tree = %{"op" => "Match", "dimension" => "territorial", "codes" => ["great_britain"]}
+      profile = %{"territorial" => ["england"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      assert result.confidence == 0.75
+    end
+
+    test "territorial direct match gives 1.0" do
+      tree = %{"op" => "Match", "dimension" => "territorial", "codes" => ["england"]}
+      profile = %{"territorial" => ["england"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      assert result.confidence == 1.0
+    end
+
+    test "mixed direct and ancestor territorial match" do
+      tree = %{
+        "op" => "Match",
+        "dimension" => "territorial",
+        "codes" => ["england", "great_britain"]
+      }
+
+      profile = %{"territorial" => ["england"]}
+      # england is direct, great_britain is ancestor. Both matched.
+      # specificity = 0.5 + 0.5 * (1 + 0.5*1)/2 = 0.875
+      # overlap = 0.4 + 0.6 * 1.0 = 1.0
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      assert_in_delta result.confidence, 0.875, 0.01
+    end
+
+    test "upstream confidence takes precedence" do
+      tree = %{
+        "op" => "Match",
+        "dimension" => "personal",
+        "codes" => ["employer", "contractor", "manufacturer"],
+        "confidence" => 0.85
+      }
+
+      profile = %{"personal" => ["employer"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      assert result.confidence == 0.85
+    end
+
+    test "And propagation with heuristic children" do
+      tree = %{
+        "op" => "And",
+        "children" => [
+          %{"op" => "Match", "dimension" => "personal", "codes" => ["employer", "contractor"]},
+          %{"op" => "Match", "dimension" => "territorial", "codes" => ["great_britain"]}
+        ]
+      }
+
+      profile = %{"personal" => ["employer"], "territorial" => ["england"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      # personal: overlap = 0.7, specificity = 1.0 → 0.7
+      # territorial: overlap = 1.0, specificity = 0.75 → 0.75
+      # And = min(0.7, 0.75) = 0.7
+      assert_in_delta result.confidence, 0.7, 0.01
+    end
+
+    test "Or propagation picks strongest heuristic child" do
+      tree = %{
+        "op" => "Or",
+        "children" => [
+          %{
+            "op" => "Match",
+            "dimension" => "personal",
+            "codes" => ["employer", "contractor", "manufacturer", "supplier"]
+          },
+          %{"op" => "Match", "dimension" => "personal", "codes" => ["employer"]}
+        ]
+      }
+
+      profile = %{"personal" => ["employer"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      # child1: overlap = 0.55, specificity = 1.0 → 0.55
+      # child2: overlap = 1.0, specificity = 1.0 → 1.0
+      # Or = max(0.55, 1.0) = 1.0
+      assert result.confidence == 1.0
+    end
+
+    test "non-matching node returns applies false" do
+      tree = %{"op" => "Match", "dimension" => "personal", "codes" => ["manufacturer"]}
+      profile = %{"personal" => ["employer"]}
+      result = ApplicabilityEvaluator.evaluate(tree, profile)
+      assert result.applies == false
+    end
+
+    test "heuristic is deterministic" do
+      tree = %{
+        "op" => "Match",
+        "dimension" => "personal",
+        "codes" => ["employer", "contractor", "manufacturer"]
+      }
+
+      profile = %{"personal" => ["employer"]}
+      r1 = ApplicabilityEvaluator.evaluate(tree, profile)
+      r2 = ApplicabilityEvaluator.evaluate(tree, profile)
+      assert r1.confidence == r2.confidence
     end
   end
 

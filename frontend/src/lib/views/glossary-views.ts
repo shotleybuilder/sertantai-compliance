@@ -1,7 +1,7 @@
 /**
  * Default views for the Legal Glossary page.
  *
- * 18 views organised into 3 sections:
+ * 19 views organised into 3 sections:
  * 1. Patterns in Law — how definitions behave across the statute book
  * 2. Metadata & Classification — filtering by jurisdiction, language, family
  * 3. Business Use Cases — specific compliance workflow tasks
@@ -21,6 +21,7 @@ const ALL_COLS = [
 	'section_id',
 	'scope',
 	'references_other_law',
+	'citation',
 	'source',
 	'inserted_at',
 	'updated_at'
@@ -109,6 +110,14 @@ const patternsInLaw: ViewDef[] = [
 		config: makeViewConfig({
 			grouping: [{ column: 'scope' }],
 			visibleCols: ['term', 'definition', 'law_name', 'scope']
+		})
+	},
+	{
+		name: 'Citations',
+		description: 'Definitions that cite or reference specific provisions within the same law',
+		config: makeViewConfig({
+			filters: [makeFilter('citation', 'equals', 'true')],
+			visibleCols: ['term', 'definition', 'law_name', 'section_id', 'scope', 'citation']
 		})
 	}
 ];

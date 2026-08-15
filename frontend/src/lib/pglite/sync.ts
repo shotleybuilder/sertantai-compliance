@@ -12,7 +12,7 @@
 import { browser } from '$app/environment';
 import { writable } from 'svelte/store';
 import { getPglite } from './client';
-import { initSchema } from './schema.sql';
+import { initSchema, SCHEMA_VERSION } from './schema.sql';
 import { ELECTRIC_URL } from '$lib/electric/client';
 import { electricFetchClient } from '$lib/electric/fetch-client';
 import { getAuthToken } from '$lib/stores/auth';
@@ -232,7 +232,7 @@ export async function startSync(): Promise<void> {
 			},
 			table: 'laws',
 			primaryKey: ['id'],
-			shapeKey: 'laws',
+			shapeKey: `laws_v${SCHEMA_VERSION}`,
 			mapColumns: (message) => {
 				const val = message.value;
 				const mapped: Record<string, unknown> = {};
@@ -285,13 +285,16 @@ export async function startSync(): Promise<void> {
 			},
 			table: 'definitions',
 			primaryKey: ['id'],
-			shapeKey: 'definitions',
+			shapeKey: `definitions_v${SCHEMA_VERSION}`,
 			mapColumns: (message) => {
 				const val = message.value;
 				const mapped: Record<string, unknown> = { ...val };
 				// Electric sends booleans as strings — convert for PGLite BOOLEAN column
 				if (typeof mapped.references_other_law === 'string') {
 					mapped.references_other_law = mapped.references_other_law === 'true';
+				}
+				if (typeof mapped.citation === 'string') {
+					mapped.citation = mapped.citation === 'true';
 				}
 				return mapped;
 			},
@@ -333,7 +336,7 @@ export async function startSync(): Promise<void> {
 					},
 					table: 'org_applicabilities',
 					primaryKey: ['id'],
-					shapeKey: `org-applicabilities-${orgId}`,
+					shapeKey: `org-applicabilities-${orgId}_v${SCHEMA_VERSION}`,
 					onInitialSync: async () => {
 						const countRes = await pg.query<{ count: number }>(
 							'SELECT COUNT(*)::int AS count FROM org_applicabilities'

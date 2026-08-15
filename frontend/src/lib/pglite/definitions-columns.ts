@@ -46,6 +46,13 @@ export const DEFINITIONS_COLUMN_METADATA: ColumnMetadata[] = [
 		nullable: false,
 		hasDefault: true
 	},
+	{
+		name: 'citation',
+		dataType: 'boolean',
+		postgresType: 'boolean',
+		nullable: false,
+		hasDefault: true
+	},
 	{ name: 'source', dataType: 'text', postgresType: 'text', nullable: false, hasDefault: true },
 	{
 		name: 'inserted_at',
@@ -71,9 +78,10 @@ export const DEFINITIONS_DEFAULT_VISIBLE = [
 	'section_id',
 	'scope',
 	'references_other_law',
+	'citation',
 	'term_welsh'
 ];
 
 /** SQL query for the glossary collection */
 export const DEFINITIONS_SQL =
-	'SELECT id, term, term_welsh, definition, law_name, section_id, scope, references_other_law, source, inserted_at, updated_at FROM definitions';
+	'SELECT id, term, term_welsh, definition, law_name, section_id, scope, references_other_law, citation, source, inserted_at, updated_at FROM definitions';

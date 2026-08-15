@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS definitions (
   section_id TEXT,
   scope TEXT,
   references_other_law BOOLEAN NOT NULL DEFAULT false,
+  citation BOOLEAN NOT NULL DEFAULT false,
   source TEXT NOT NULL DEFAULT '',
   inserted_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -182,7 +183,7 @@ CREATE INDEX IF NOT EXISTS idx_laws_making_classification ON laws (making_classi
  * Drops and recreates if schema version has changed (e.g. column type fixes).
  * Otherwise safe to call multiple times — uses IF NOT EXISTS.
  */
-const SCHEMA_VERSION = 18; // Add definitions table for legal glossary
+export const SCHEMA_VERSION = 21; // Add citation column + Citations view
 
 export async function initSchema(pg: {
 	exec: (sql: string) => Promise<unknown>;
@@ -204,6 +205,12 @@ export async function initSchema(pg: {
 		await pg.exec('DROP TABLE IF EXISTS laws CASCADE');
 		await pg.exec('DROP TABLE IF EXISTS org_applicabilities CASCADE');
 		await pg.exec('DROP TABLE IF EXISTS definitions CASCADE');
+		// Drop Electric shape metadata so shapeKeys re-sync from offset -1
+		await pg.exec(`DO $$ DECLARE _sql TEXT; BEGIN
+			SELECT string_agg('DROP TABLE IF EXISTS ' || tablename || ' CASCADE', '; ')
+				INTO _sql FROM pg_tables WHERE tablename LIKE 'electric_%';
+			IF _sql IS NOT NULL THEN EXECUTE _sql; END IF;
+		END $$`);
 		// Drop all gridlite tables so both kit and views packages recreate cleanly
 		await pg.exec('DROP TABLE IF EXISTS _gridlite_column_state CASCADE');
 		await pg.exec('DROP TABLE IF EXISTS _gridlite_views CASCADE');

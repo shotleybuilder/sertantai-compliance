@@ -33,7 +33,7 @@ Screener accuracy has only been judged by eye, plus a one-off Enhesa report in J
 ## Dependencies
 
 - ✅ v0.1-01 CI green (closed)
-- ✅ QQ ground truth in dev DB (711 org_applicabilities)
+- ✅ QQ legacy register in dev DB (711 org_applicabilities)
 - ✅ v0.1-04a Profile Vocabulary & API (reviewed QQ profile saved; 04a suspended with non-blocking items)
 
 ## QQ legacy register (dev DB, 2026-09-25)

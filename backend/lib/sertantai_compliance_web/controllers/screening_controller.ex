@@ -7,6 +7,7 @@ defmodule SertantaiComplianceWeb.ScreeningController do
   use SertantaiComplianceWeb, :controller
 
   alias SertantaiCompliance.Fitness.ProfileCheck
+  alias SertantaiCompliance.Fitness.Screener
   alias SertantaiCompliance.Repo
   alias SertantaiCompliance.Sync.OrgApplicability
   alias SertantaiCompliance.Sync.OrgScreeningProfile
@@ -528,58 +529,9 @@ defmodule SertantaiComplianceWeb.ScreeningController do
           end
       end
 
-    # Load all Making, in-force laws with compiled_applicability
-    {:ok, %{rows: law_rows}} =
-      Repo.query(
-        """
-        SELECT name, title_en, family, compiled_applicability,
-               significance_rating, significance_score, geo_extent,
-               duty_holder, power_holder, rights_holder, responsibility_holder,
-               fitness_entities, is_making
-        FROM legal_register
-        WHERE is_making = true
-          AND country = 'uk'
-          AND (live IS NULL OR (live NOT LIKE '%Revoked%' AND live NOT LIKE '%Repealed%' AND live NOT LIKE '%Abolished%'))
-        ORDER BY name
-        """,
-        []
-      )
-
-    laws =
-      Enum.map(law_rows, fn [
-                              name,
-                              title_en,
-                              family,
-                              compiled_app,
-                              sig_rating,
-                              sig_score,
-                              geo_extent,
-                              duty_holder,
-                              power_holder,
-                              rights_holder,
-                              resp_holder,
-                              fitness_entities,
-                              is_making
-                            ] ->
-        %{
-          name: name,
-          title_en: title_en,
-          family: family,
-          compiled_applicability: decode_jsonb(compiled_app),
-          significance_rating: sig_rating,
-          significance_score: sig_score,
-          geo_extent: geo_extent,
-          duty_holder: decode_jsonb(duty_holder),
-          power_holder: decode_jsonb(power_holder),
-          rights_holder: decode_jsonb(rights_holder),
-          responsibility_holder: decode_jsonb(resp_holder),
-          fitness_entities: fitness_entities,
-          is_making: is_making
-        }
-      end)
-
-    # Evaluate all laws
-    evaluated = ApplicabilityEvaluator.evaluate_batch_with_reasons(laws, profile)
+    # Evaluate the screening corpus (shared with mix screener.benchmark)
+    laws = Screener.corpus()
+    screened = Screener.screen(profile, laws)
 
     # Load existing applicability decisions for this org
     {:ok, %{rows: app_rows}} =
@@ -592,21 +544,19 @@ defmodule SertantaiComplianceWeb.ScreeningController do
 
     # Merge evaluation results with law metadata and existing status
     matches =
-      Enum.map(evaluated, fn result ->
-        law = Enum.find(laws, fn l -> l.name == result.name end)
-
+      Enum.map(screened, fn %{law: law} = result ->
         %{
-          law_name: result.name,
-          title: law && law.title_en,
-          family: law && law.family,
+          law_name: law.name,
+          title: law.title_en,
+          family: law.family,
           applies: result.applies,
           confidence: Float.round(result.confidence, 3),
           match_reasons: result.reasons,
           unmatched_dimensions: result.unmatched_dimensions,
-          significance_rating: law && law.significance_rating,
-          significance_score: law && law.significance_score,
-          geo_extent: law && law.geo_extent,
-          current_status: Map.get(status_map, result.name, "unreviewed"),
+          significance_rating: law.significance_rating,
+          significance_score: law.significance_score,
+          geo_extent: law.geo_extent,
+          current_status: Map.get(status_map, law.name, "unreviewed"),
           actor_summary: build_actor_summary(law)
         }
       end)
@@ -715,8 +665,6 @@ defmodule SertantaiComplianceWeb.ScreeningController do
 
     json(conn, %{questions: questions})
   end
-
-  defp build_actor_summary(nil), do: %{}
 
   defp build_actor_summary(law) do
     extract = fn holder_json ->

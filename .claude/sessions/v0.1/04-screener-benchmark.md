@@ -23,7 +23,7 @@ Screener accuracy has only been judged by eye, plus a one-off Enhesa report in J
 
 ## Todo
 
-- ⬜ Extract the screening run (corpus query + `evaluate_batch_with_reasons`) from `ScreeningController.evaluate/2` into a shared module, so the benchmark measures exactly what users see
+- ✅ Extracted the screening run into `Fitness.Screener` (`corpus/0`, `screen/2`); `POST /evaluate` and the benchmark share it
 - ⬜ Reference fixture: snapshot the QQ legacy register (yes/no, source, corpus bucket) to `backend/priv/benchmarks/qq/legacy_register.csv`, so it's versioned and independent of DB drift
 - ⬜ `mix screener.benchmark`: agreement matrix (both / register-only / screener-only / neither), broken down by tier, family and jurisdiction; a triage CSV for every diff with a probable cause, on three sides: **register** (revoked, not_making), **tree** (no_tree, territory_only_tree, generic_code_gate, vocabulary_gap, construction_misfire, gov_actor_gate), **profile** (profile_gap); dated markdown summary; diff vs the previous run
 - ✅ Reviewed QQ profile saved (04a); snapshots in `backend/priv/benchmarks/qq/profile_as_found.json` and `profile_reviewed.json`, so the benchmark can run both

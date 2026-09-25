@@ -26,6 +26,11 @@ Compliance-side tuning is done for now (04: benchmark; 04b: prefer-inclusion sem
 
 Resume this loop as those fixes land. Re-run `mix screener.benchmark` (it reports deltas) and tune from the ranked causes.
 
+### Updates from sertantai-legal
+
+- **2026-09-25: geo_extent fixed** (legal#162, `106962e`) on the shared dev DB. 11,158 UK laws were updated, and devolved laws are no longer mislabelled UK (nisr → NI, ssi → S). New column `geo_extent_source`: when it's NULL the value is legacy and unverified, so treat it only as an upper bound. Compliance's type-code jurisdiction exclusion is unaffected; the QQ benchmark reported by legal is 68.0%.
+- **Coming: legal#163**, columns `application_regions`, `application_source` and `application_evidence` (filled by fractalaw, e.g. England only). Proposal: the screener gates on `application_regions` when set, otherwise on `geo_extent` as an upper bound. **Compliance work when it lands:** add that gate to `Fitness.Jurisdiction`/`Screener` as a categorical exclusion (consistent with prefer-inclusion: only authoritative sources exclude), then re-run the benchmark.
+
 ## Loop (weekly checkpoints: ~3 Oct baseline, 10 Oct, 17 Oct)
 
 1. Run `mix screener.benchmark --org qq` and diff it against the last run.

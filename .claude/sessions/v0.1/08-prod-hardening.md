@@ -22,7 +22,8 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 
 - ✅ **npm audit**: 10 → 5 with non-breaking `npm audit fix` (js-yaml, nanoid, devalue, vitest, @vitest/mocker); Vite dev server now binds localhost by default (`VITE_DEV_HOST` to override; set in `docker-compose.dev.yml`)
 - ⏸️ **Svelte 5 / GridLite 0.10 / Vite 8 upgrade** clears the remaining 5. **Deferred until after v0.1** (user, 2026-09-25): pending session `2026-09-25-svelte5-gridlite-upgrade.md`
-- ⬜ **Backups**: the stack's backup/restore scripts are Baserow-only (found in 02). `deploy-prod.sh` now dumps `sertantai_legal_prod` before backend deploys; still needed: **scheduled** dumps, retention, off-server copies, and a tested restore, agreed with legal (shared DB)
+- ⬜ **Backups**: off-server target built (Hetzner Storage Box, 1 TB, 2026-09-25). Next: box settings (snapshots, sub-accounts), then the stack backup job, restore drill and freshness check. Design below
+- ⬜ **NAS copy** (user's home NAS pulls from the Storage Box, read-only sub-account): third copy outside Hetzner
 - ✅ **IDB isolation**: already scoped per org in `pglite/client.ts` (IDB name from the JWT `org_id`; the #106 fix was ported earlier)
 - ✅ **Electric proxy cross-tenant leak (critical, fixed 2026-09-25)**: see below
 - ✅ Prod compliance **stopped** 2026-09-25 13:26 UTC (user's decision) until the fix is deployed: backend, frontend and Electric (`docker compose stop`; containers kept). Both leak paths now return 502. Prod exposure was not probed.
@@ -121,3 +122,44 @@ Tests: 98 backend (4 new AuthPlug). Credo and Dialyzer clean.
 - `location = /health/detailed { return 404; }`: node name, versions and DB status are no longer public. Internal callers (hub health proxy, monitoring) use the Docker network.
 - `sertantai-compliance-electric` pinned by digest to the image prod ran (`sha256:5d85702c…`, built 2026-02-12).
 - Validated with `nginx -t` (dummy certs, stand-in hosts), plus a local functional run with host networking against the dev backend: /health 200, /health/detailed 404, HSTS and CSP-RO headers present, /electric/ no longer reaches Electric.
+
+## Backups: design (2026-09-25)
+
+**Current state.** There is no scheduled backup of any database on sertantai-hz (no crontab). `~/backups` holds two one-off dumps from 2025-10-26 (baserow, ehs_enforcement_prod), on the same disk. The stack's `backup.sh`/`restore.sh` are Baserow-only. `deploy-prod.sh` dumps `sertantai_legal_prod` before backend deploys, also on the same disk. DB sizes: ehs_enforcement_prod 7.5 GB, baserow 2.7 GB, sertantai_legal_prod 702 MB (about 1.5 GB after legal#27), auth and hub 8 MB each. 146 GB free.
+
+**What can't be rebuilt:**
+- compliance customer data: `org_applicabilities` (register decisions and reasons), screening profiles, change-review decisions, and the `applicability_events` audit trail, which is evidence for a compliance product;
+- `sertantai_auth_prod` (users, orgs, password hashes; org IDs tie everything together).
+
+Legal's reference data can be re-pushed from dev. `law_change_snapshots` can be re-baselined.
+
+**Design:**
+1. **Two tiers.**
+   - Compliance-owned tables dumped separately (`pg_dump -t …`): small, and restorable without rolling back legal on the shared DB.
+   - Full `-Fc` dumps of `sertantai_legal_prod`, `sertantai_auth_prod` and `sertantai_hub_prod` for disaster recovery.
+2. **RPO:** daily dumps for v0.1. Point-in-time recovery (wal-g/pgBackRest) after v0.1 if QQ's usage justifies it.
+3. **Off-server, encrypted:** restic over SFTP (SSH port 23, key-only) to the Storage Box. The restic password is kept in the user's password manager as well as on the server; without it nothing can be restored.
+4. **Runs in sertantai-stack** (host cron or a small backup container), not in the app, so backups still work when compliance is down (as now). Agreed with legal (shared DB).
+5. **Retention:** compliance tables 30 daily + 12 monthly; full dumps 7 daily + 4 weekly (`restic forget --keep-*`, then `prune`).
+6. **Monthly restore drill** into a scratch DB with row-count checks, plus a runbook. **Freshness alert** if the last successful backup is older than about 26 h (monitoring item).
+
+**Storage Box settings (recommended to the user):**
+- SMB off, WebDAV off, **SSH on**.
+- **External reachability on**: needed for the NAS pull. Accepted trade: SSH port 23 is internet-reachable, with key-only auth and directory-restricted sub-accounts.
+- Labels `purpose=backups`, `env=prod`, `stack=sertantai`; name `sertantai-backups`; ideally a different Hetzner location from the server.
+- **Automatic snapshots on the box** (e.g. daily, keep 14). They're managed only in the Hetzner console, so they protect against a compromised server deleting backups with its SSH key.
+- **Sub-accounts:**
+  - `backup` (read-write), restricted to `/sertantai`, used by the server;
+  - `nas` (**read-only**), same directory, used by the NAS.
+
+**NAS copy (3-2-1):**
+- Copies: live DB, Storage Box, home NAS. Media: Hetzner and own hardware. Outside Hetzner: the NAS.
+- **The NAS pulls** from the box on a schedule (rclone / `restic copy` / the NAS's SFTP backup task) using the read-only `nas` sub-account. The server never pushes to the home network, so no inbound ports at home.
+- The NAS holds only restic ciphertext; restoring from it needs the restic password.
+- **Data location:** QinetiQ (defence) supplier questionnaires may ask where customer data is stored. "Encrypted copies on the founder's home NAS" should be stated plainly. Option: send only legal/reference data to the NAS and keep QQ-specific tables on Hetzner only (the backup script can split them).
+
+**Open, from the user:**
+- Scope: compliance, auth and hub only, or every DB on the server (enforcement and baserow also have no backups)?
+- Confirm daily RPO for v0.1.
+- Whether QQ-specific tables go to the NAS.
+- The Storage Box hostname (`uXXXXX.your-storagebox.de`) and sub-account usernames. **No passwords in chat**; keys and the restic password are generated on the server.

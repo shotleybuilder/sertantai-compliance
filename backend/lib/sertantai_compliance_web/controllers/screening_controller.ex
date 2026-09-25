@@ -6,12 +6,17 @@ defmodule SertantaiComplianceWeb.ScreeningController do
   """
   use SertantaiComplianceWeb, :controller
 
+  alias SertantaiCompliance.CSV
   alias SertantaiCompliance.Fitness.ProfileCheck
   alias SertantaiCompliance.Fitness.Screener
   alias SertantaiCompliance.Repo
   alias SertantaiCompliance.Sync.OrgApplicability
   alias SertantaiCompliance.Sync.OrgScreeningProfile
   alias SertantaiCompliance.Sync.ApplicabilityEvent
+
+  # Events shown in the change feed (see Sync.ChangeDetector). law_status_changed
+  # is the pre-2026-09-25 event type, kept so older events still show.
+  @change_events_sql "('law_amended', 'new_law_available', 'law_status_changed')"
 
   require Logger
 
@@ -847,7 +852,7 @@ defmodule SertantaiComplianceWeb.ScreeningController do
         FROM applicability_events
         WHERE organization_id = $1
           AND decision IS NULL
-          AND event IN ('law_status_changed', 'new_law_available', 'match_score_changed')
+          AND event IN #{@change_events_sql}
         GROUP BY materiality
         """,
         [org_id_binary]
@@ -864,7 +869,7 @@ defmodule SertantaiComplianceWeb.ScreeningController do
         FROM applicability_events
         WHERE organization_id = $1
           AND decision IS NULL
-          AND event IN ('law_status_changed', 'new_law_available', 'match_score_changed')
+          AND event IN #{@change_events_sql}
         GROUP BY event
         """,
         [org_id_binary]
@@ -899,6 +904,7 @@ defmodule SertantaiComplianceWeb.ScreeningController do
         informational: Map.get(by_materiality, "informational", 0)
       },
       by_event: %{
+        law_amended: Map.get(by_event, "law_amended", 0),
         law_status_changed: Map.get(by_event, "law_status_changed", 0),
         new_law_available: Map.get(by_event, "new_law_available", 0),
         match_score_changed: Map.get(by_event, "match_score_changed", 0)
@@ -963,6 +969,54 @@ defmodule SertantaiComplianceWeb.ScreeningController do
 
     json(conn, %{changes: changes, count: length(changes)})
   end
+
+  @doc """
+  GET /api/screening/changes/export — the change feed as CSV, for hand-off to
+  an assessment tool. `?status=all` includes decided changes (default:
+  pending only).
+  """
+  def changes_export(conn, params) do
+    {:ok, org_id_binary} = Ecto.UUID.dump(conn.assigns.organization_id)
+    pending_only = params["status"] != "all"
+
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT ae.law_name, ae.metadata->>'title', ae.event,
+               coalesce(ae.metadata->>'change_type', ''),
+               coalesce(array_to_string(ARRAY(SELECT jsonb_array_elements_text(
+                 coalesce(ae.metadata->'caused_by', '[]'::jsonb))), ' '), ''),
+               coalesce(ae.metadata->>'tier', ''), ae.materiality, ae.review_due_date,
+               coalesce(ae.decision, 'pending'), coalesce(ae.decision_reason, ''),
+               ae.inserted_at
+        FROM applicability_events ae
+        WHERE ae.organization_id = $1 AND ae.event IN #{@change_events_sql}
+          AND ($2 = false OR ae.decision IS NULL)
+        ORDER BY ae.review_due_date NULLS LAST, ae.law_name
+        """,
+        [org_id_binary, pending_only]
+      )
+
+    headers =
+      ~w(law_name title event change_type caused_by screener_tier materiality review_due_date decision decision_reason detected_at)
+
+    body =
+      CSV.dump_to_iodata([headers | Enum.map(rows, fn row -> Enum.map(row, &csv_cell/1) end)])
+
+    conn
+    |> put_resp_content_type("text/csv")
+    |> put_resp_header(
+      "content-disposition",
+      ~s(attachment; filename="legal-changes-#{Date.utc_today()}.csv")
+    )
+    |> send_resp(200, body)
+  end
+
+  defp csv_cell(nil), do: ""
+  defp csv_cell(%Date{} = d), do: Date.to_iso8601(d)
+  defp csv_cell(%NaiveDateTime{} = dt), do: NaiveDateTime.to_iso8601(dt)
+  defp csv_cell(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp csv_cell(v), do: to_string(v)
 
   @doc "PUT /api/screening/changes/:id/decide — record a decision on a change"
   def decide_change(conn, %{"id" => event_id} = params) do
@@ -1063,7 +1117,7 @@ defmodule SertantaiComplianceWeb.ScreeningController do
 
   defp build_changes_filter(org_id_binary, materiality_filter, event_filter) do
     base =
-      "ae.organization_id = $1 AND ae.event IN ('law_status_changed', 'new_law_available', 'match_score_changed')"
+      "ae.organization_id = $1 AND ae.event IN #{@change_events_sql}"
 
     params = [org_id_binary]
     idx = 2

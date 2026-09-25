@@ -30,9 +30,9 @@ summary: >
 - ✅ Oban enabled (config, supervision, `oban_jobs` migration v14): `ChangeDetectionWorker` daily at 05:00 UTC; `mix changes.detect [--baseline]`
 - ✅ Replay against dev data (rewound snapshot rows): amended, part_revoked, revoked and new-law events all correct; a second run raises nothing
 - ✅ Tests for diff/status (8 new; backend 79)
-- ⬜ API: include `law_amended` in changes summary/list; show caused_by; CSV export endpoint
-- ⬜ Change feed UI: render law_amended (change type, amending/revoking laws), new-law tier and caveats; export button
-- ⬜ Clear the replay test events, then set a fresh baseline in dev
+- ✅ API: feed shows `law_amended`, `new_law_available` and legacy `law_status_changed` (drops `match_score_changed`); `GET /changes/export` CSV (pending by default, `?status=all`), soonest review first; shared `SertantaiCompliance.CSV`
+- ✅ Change feed UI: groups "Laws in your register amended or revoked" / "New laws that apply to you"; plain-language lines ("Partly revoked by UK_asp_2008_5", "New law that applies to you · strong screener match"); archive/keep for revocations, acknowledge for amendments; Export CSV button. `$lib/views/change-feed.ts` + tests (frontend 138, backend 81)
+- ⬜ Clear the 4 replay test events for QQ in dev (kept for now so the feed can be seen in the UI); the dev baseline is already current
 - ⬜ Prod: baseline on the first run after session 03's data push; exit criterion below
 
 ## Exit criteria

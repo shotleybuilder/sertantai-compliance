@@ -24,10 +24,9 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
   would it apply if the profile also had the generic codes?).
   """
 
+  alias SertantaiCompliance.CSV
   alias SertantaiCompliance.Fitness.{ApplicabilityEvaluator, Screener}
   alias SertantaiCompliance.Repo
-
-  NimbleCSV.define(__MODULE__.CSV, separator: ",", escape: "\"")
 
   # Material codes true of almost any organisation that gate applicability
   # in trees. No human would enter them in a profile (sertantai-legal#161).
@@ -78,14 +77,14 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
   def write_reference!(rows, path) do
     lines = Enum.map(rows, &[&1.law_name, &1.status, &1.source])
     File.mkdir_p!(Path.dirname(path))
-    File.write!(path, __MODULE__.CSV.dump_to_iodata([@reference_headers | lines]))
+    File.write!(path, CSV.dump_to_iodata([@reference_headers | lines]))
   end
 
   @spec read_reference!(Path.t()) :: [reference_row()]
   def read_reference!(path) do
     path
     |> File.read!()
-    |> __MODULE__.CSV.parse_string()
+    |> CSV.parse_string()
     |> Enum.map(fn [law_name, status, source] ->
       %{law_name: law_name, status: status, source: source}
     end)
@@ -552,7 +551,7 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
 
     File.write!(
       Path.join(dir, "triage.csv"),
-      __MODULE__.CSV.dump_to_iodata([@triage_headers | lines])
+      CSV.dump_to_iodata([@triage_headers | lines])
     )
 
     File.write!(

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { authFetch } from '$lib/api/client';
+	import { describeChange, isRemovalChange } from '$lib/views/change-feed';
 
 	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4004';
 
@@ -9,6 +10,7 @@
 		overdue: number;
 		by_materiality: { major: number; moderate: number; minor: number; informational: number };
 		by_event: {
+			law_amended: number;
 			law_status_changed: number;
 			new_law_available: number;
 			match_score_changed: number;
@@ -44,17 +46,38 @@
 	};
 
 	const eventLabels: Record<string, string> = {
-		law_status_changed: 'Status Changed',
-		new_law_available: 'New Match',
-		match_score_changed: 'Score Changed'
+		law_amended: 'Amended / Revoked',
+		new_law_available: 'New Law',
+		law_status_changed: 'Status Changed'
 	};
 
-	const eventGroupOrder = ['law_status_changed', 'new_law_available', 'match_score_changed'];
+	const eventGroupOrder = ['law_amended', 'new_law_available', 'law_status_changed'];
 	const eventGroupLabels: Record<string, string> = {
-		law_status_changed: 'Repealed / Status Changes',
-		new_law_available: 'New Law Matches',
-		match_score_changed: 'Enrichment Updates'
+		law_amended: 'Laws in your register amended or revoked',
+		new_law_available: 'New laws that apply to you',
+		law_status_changed: 'Status changes (earlier detection)'
 	};
+
+	let exporting = false;
+
+	/** Download pending changes as CSV (for hand-off to an assessment tool). */
+	async function exportCsv() {
+		exporting = true;
+		try {
+			const res = await authFetch(`${API_URL}/api/screening/changes/export`);
+			if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+			const url = URL.createObjectURL(await res.blob());
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `legal-changes-${new Date().toISOString().slice(0, 10)}.csv`;
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Export failed');
+		} finally {
+			exporting = false;
+		}
+	}
 
 	let groupByEvent = true;
 
@@ -115,7 +138,16 @@
 
 <div class="h-full overflow-y-auto">
 	<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-		<h1 class="text-2xl font-bold text-gray-900 mb-6">Change Review</h1>
+		<div class="flex items-center justify-between mb-6">
+			<h1 class="text-2xl font-bold text-gray-900">Change Review</h1>
+			<button
+				on:click={exportCsv}
+				disabled={exporting}
+				class="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+			>
+				{exporting ? 'Exporting…' : 'Export CSV'}
+			</button>
+		</div>
 
 		{#if loading && !summary}
 			<p class="text-gray-500">Loading...</p>
@@ -204,9 +236,7 @@
 											</div>
 											<div class="text-sm text-gray-500 mt-0.5">
 												{change.law_name}
-												{#if change.metadata?.change_type}
-													&middot; {change.metadata.change_type}
-												{/if}
+												&middot; {describeChange(change)}
 												{#if change.review_due_date}
 													&middot; Due {change.review_due_date}
 												{/if}
@@ -224,7 +254,7 @@
 															class="text-sm border rounded px-2 py-1 w-48"
 														/>
 													{/if}
-													{#if change.event === 'law_status_changed'}
+													{#if isRemovalChange(change)}
 														<button
 															on:click={() => decide(change.id, 'archive')}
 															class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
@@ -305,9 +335,7 @@
 									</div>
 									<div class="text-sm text-gray-500 mt-0.5">
 										{change.law_name}
-										{#if change.metadata?.change_type}
-											&middot; {change.metadata.change_type}
-										{/if}
+										&middot; {describeChange(change)}
 										{#if change.review_due_date}
 											&middot; Due {change.review_due_date}
 										{/if}
@@ -325,7 +353,7 @@
 													class="text-sm border rounded px-2 py-1 w-48"
 												/>
 											{/if}
-											{#if change.event === 'law_status_changed'}
+											{#if isRemovalChange(change)}
 												<button
 													on:click={() => decide(change.id, 'archive')}
 													class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"

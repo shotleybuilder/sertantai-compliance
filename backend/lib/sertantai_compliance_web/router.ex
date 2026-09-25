@@ -60,6 +60,7 @@ defmodule SertantaiComplianceWeb.Router do
     # Change management
     get "/changes/summary", ScreeningController, :changes_summary
     get "/changes", ScreeningController, :changes_list
+    get "/changes/export", ScreeningController, :changes_export
     put "/changes/:id/decide", ScreeningController, :decide_change
 
     # Debug (dev only)

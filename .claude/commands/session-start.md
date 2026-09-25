@@ -57,7 +57,8 @@ For PENDING sessions (scoped but not starting now), use `status: pending` in the
 2. **Change the status** in both the frontmatter (`status: active`) and the heading (`(ACTIVE)`).
 3. **Review the work items** — confirm which are still relevant. Remove or update stale items.
 4. **Check dependencies** — have they been resolved since the session was paused?
-5. **Brief the user** on the current state: what's done, what's next, any blockers resolved.
+5. **If it was suspended with a learning block** (via `/session-suspend`): keep its decisions and lessons, remove the `suspended:` line, and replace the `> Suspended …` note under the heading with `> Resumed <date>: <why now>`.
+6. **Brief the user** on the current state: what's done, what's next, any blockers resolved.
 
 ## Conventions
 

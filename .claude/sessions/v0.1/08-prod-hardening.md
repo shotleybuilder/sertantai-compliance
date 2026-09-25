@@ -20,7 +20,8 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 
 ## Todo
 
-- ⬜ **npm audit**: 10 vulnerabilities (3 high: js-yaml, nanoid; moderate: svelte ≤5.55.6, cookie, devalue, esbuild, vitest), found in v0.1-01
+- ✅ **npm audit**: 10 → 5 with non-breaking `npm audit fix` (js-yaml, nanoid, devalue, vitest, @vitest/mocker); Vite dev server now binds localhost by default (`VITE_DEV_HOST` to override; set in `docker-compose.dev.yml`)
+- ⬜ **Svelte 5 / Vite 8 migration** clears the remaining 5 (see below). User's decision: before or after v0.1
 - ⬜ **Backups**: the stack's backup/restore scripts are Baserow-only (found in 02). `deploy-prod.sh` now dumps `sertantai_legal_prod` before backend deploys; still needed: **scheduled** dumps, retention, off-server copies, and a tested restore, agreed with legal (shared DB)
 - ✅ **IDB isolation**: already scoped per org in `pglite/client.ts` (IDB name from the JWT `org_id`; the #106 fix was ported earlier)
 - ✅ **Electric proxy cross-tenant leak (critical, fixed 2026-09-25)**: see below
@@ -56,3 +57,19 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 - **Restart trap:** nginx `depends_on` includes the compliance services, so `docker compose up -d nginx` without `--no-deps` would start them again. Restart nginx with `--no-deps` (or `docker compose restart nginx`) until the fix is deployed.
 - Unrelated, pre-existing: the **sertantai-legal prod backend was in a crash loop** (67,113 restarts; `BadBooleanError` at `application.ex:30`, re-running migrations on each boot). **Stopped** at the user's request, 2026-09-25 ~13:30 UTC; it stays down. Legal's frontend and Electric are still running. Fixing it is legal's side.
 - All legal and compliance containers use `restart: unless-stopped`, so stopped containers stay stopped across daemon or server restarts. The nginx `depends_on` trap still applies (it also lists `sertantai-legal`).
+
+## npm audit (2026-09-25)
+
+`npm audit fix` (non-breaking) took it from 10 findings to 5. Only the lockfile changed; check, lint, 138 tests and the build all pass.
+
+Remaining 5, all needing majors:
+- **vite ≤6.4.2 (high)**: dev-server path traversal and launch-editor. Fixed only in Vite 8.
+- **esbuild (moderate)**: dev server accepts cross-origin requests. Fixed via Vite 8.
+- **svelte ≤5.55.6 (moderate)**: SSR attribute issues. The app is on **Svelte 4.2.20**; the fix is Svelte 5.
+- **@sveltejs/kit / cookie (low)**: server cookie parsing.
+
+**Prod exposure is low.** Prod serves a static build (adapter-static behind `serve`): no Vite dev server, no SSR, no Kit server runtime. The real exposure was the dev server bound to `0.0.0.0` (reachable on the LAN). It now binds localhost unless `VITE_DEV_HOST` is set.
+
+**The full fix is a Svelte 5 migration.** vite-plugin-svelte 7 needs Svelte ≥5.46 and Vite 8. Compliance still uses Svelte 4 syntax (`$:`, `export let`, `on:click`). sertantai-legal has already migrated. The GridLite packages' peer ranges need checking.
+
+npm 11 warns that esbuild's and svelte-preprocess's install scripts are "not covered by allowScripts". The build still works (esbuild resolves its platform binary); revisit if Docker builds fail.

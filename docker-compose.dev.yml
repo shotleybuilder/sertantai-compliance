@@ -94,6 +94,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     environment:
+      VITE_DEV_HOST: "0.0.0.0"  # vite.config.ts binds localhost unless set
       PUBLIC_API_URL: http://localhost:4004
       PUBLIC_ELECTRIC_URL: http://localhost:3003  # New Electric HTTP API
       PUBLIC_ENV: development

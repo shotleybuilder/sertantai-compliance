@@ -12,7 +12,10 @@ export default defineConfig({
 		__APP_VERSION__: JSON.stringify(version)
 	},
 	server: {
-		host: '0.0.0.0',
+		// Localhost by default: the Vite dev server has known path-traversal
+		// issues (npm audit, fixed only in Vite 8 / Svelte 5), so don't expose
+		// it to the network. Containers set VITE_DEV_HOST=0.0.0.0.
+		host: process.env.VITE_DEV_HOST || 'localhost',
 		port: 5176
 	},
 	optimizeDeps: {

@@ -178,3 +178,8 @@ Legal's reference data can be re-pushed from dev. `law_change_snapshots` can be 
   3. Write the backup container in sertantai-stack (local commit for review).
   4. `restic init`, first backup, restore test.
   5. NAS key and pull job.
+- **Done:**
+  - Sub-account mapping confirmed: `sub1` = backup (base `/sertantai/`, RW, not externally reachable); `sub2` = nas (base `/sertantai/repo/`, RO, externally reachable).
+  - Key `~/.ssh/storagebox_backup` generated on sertantai-hz (fingerprint `SHA256:xEU35IhU…6dz0`), installed by the user via `install-ssh-key`.
+  - Key-only SFTP from the server verified.
+  - `/sertantai/repo` exists (created by the panel with sub2). From sub1 the chroot shows it as `/home/repo`, so the restic repo is `sftp:…:repo` (relative).

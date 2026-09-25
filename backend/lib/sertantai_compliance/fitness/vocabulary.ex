@@ -58,8 +58,10 @@ defmodule SertantaiCompliance.Fitness.Vocabulary do
   def current do
     now = System.monotonic_time(:millisecond)
 
+    ttl = Application.get_env(:sertantai_compliance, :vocabulary_cache_ttl_ms, @ttl_ms)
+
     case :persistent_term.get(@cache_key, nil) do
-      {built_at, vocab} when now - built_at < @ttl_ms -> vocab
+      {built_at, vocab} when now - built_at < ttl -> vocab
       _ -> refresh()
     end
   end

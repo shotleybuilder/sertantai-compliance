@@ -49,6 +49,8 @@ defmodule SertantaiComplianceWeb.Router do
     # Profile
     get "/profile", ScreeningController, :get_profile
     put "/profile", ScreeningController, :upsert_profile
+    patch "/profile", ScreeningController, :patch_profile
+    post "/profile/check", ScreeningController, :check_profile
     get "/vocabulary", ScreeningController, :vocabulary
 
     # Evaluation (fitness engine)

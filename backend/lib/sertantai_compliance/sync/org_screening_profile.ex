@@ -93,6 +93,16 @@ defmodule SertantaiCompliance.Sync.OrgScreeningProfile do
       )
     end
 
+    # Answers to conditional questions (GET /api/screening/questions), matched
+    # against the `conditional` dimension of expression trees (e.g. at_work).
+    attribute :conditions, {:array, :string} do
+      default([])
+
+      description(
+        "Conditional facts that hold for the org, e.g. at_work. Codes come from GET /api/screening/questions."
+      )
+    end
+
     create_timestamp(:inserted_at)
     update_timestamp(:updated_at)
   end
@@ -116,7 +126,8 @@ defmodule SertantaiCompliance.Sync.OrgScreeningProfile do
         :processes,
         :sector,
         :certifications,
-        :contract_requirements
+        :contract_requirements,
+        :conditions
       ])
     end
 
@@ -131,11 +142,38 @@ defmodule SertantaiCompliance.Sync.OrgScreeningProfile do
         :processes,
         :sector,
         :certifications,
-        :contract_requirements
+        :contract_requirements,
+        :conditions
+      ])
+    end
+
+    update :patch do
+      description("""
+      Partially update a screening profile: only the fields given change, every
+      other field keeps its value. Use this to add or correct a few values.
+      """)
+
+      accept([
+        :regions,
+        :governed_actors,
+        :government_actors,
+        :activities,
+        :locations,
+        :materials,
+        :processes,
+        :sector,
+        :certifications,
+        :contract_requirements,
+        :conditions
       ])
     end
 
     create :upsert do
+      description("""
+      Create or fully replace an organisation's screening profile. Fields not
+      given are reset to empty. Use :patch to change only some fields.
+      """)
+
       accept([
         :organization_id,
         :regions,
@@ -147,7 +185,8 @@ defmodule SertantaiCompliance.Sync.OrgScreeningProfile do
         :processes,
         :sector,
         :certifications,
-        :contract_requirements
+        :contract_requirements,
+        :conditions
       ])
 
       upsert?(true)
@@ -163,8 +202,42 @@ defmodule SertantaiCompliance.Sync.OrgScreeningProfile do
         :processes,
         :sector,
         :certifications,
-        :contract_requirements
+        :contract_requirements,
+        :conditions
       ])
+    end
+
+    # Generic actions below are the machine-facing surface (REST today, MCP via
+    # ash_ai in v0.2): descriptions are written for AI clients.
+
+    action :vocabulary, :map do
+      description("""
+      Describe the screening vocabulary: how profiles are matched against laws,
+      every settable profile field, and every code per dimension (personal,
+      material, territorial, conditional) with the number of laws using it.
+      Read this before setting a profile.
+      """)
+
+      run(fn _input, _context ->
+        {:ok, SertantaiCompliance.Fitness.ProfileCheck.describe()}
+      end)
+    end
+
+    action :check, :map do
+      description("""
+      Check a profile (full or partial, not saved) against the vocabulary.
+      Returns valid: false with each value that cannot match any law and
+      suggested codes, plus how values are routed to dimensions.
+      """)
+
+      argument :profile, :map do
+        allow_nil?(false)
+        description("Profile fields to check, e.g. %{\"materials\" => [\"asbestos\"]}")
+      end
+
+      run(fn input, _context ->
+        {:ok, SertantaiCompliance.Fitness.ProfileCheck.check(input.arguments.profile)}
+      end)
     end
 
     read :by_organization do
@@ -178,7 +251,10 @@ defmodule SertantaiCompliance.Sync.OrgScreeningProfile do
     define(:create, args: [:organization_id])
     define(:upsert)
     define(:update)
+    define(:patch)
     define(:by_organization, args: [:organization_id])
     define(:destroy)
+    define(:vocabulary)
+    define(:check, args: [:profile])
   end
 end

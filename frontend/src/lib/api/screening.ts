@@ -24,6 +24,7 @@ export interface ScreeningProfile {
 	sector: string[];
 	certifications?: string[];
 	contract_requirements?: string[];
+	conditions?: string[];
 	inserted_at?: string;
 	updated_at?: string;
 }
@@ -105,9 +106,14 @@ export async function getProfile(): Promise<ScreeningProfile> {
 	return res.json();
 }
 
+/**
+ * Save the wizard's fields. PATCH, not PUT: only the fields sent change, so
+ * values set through the API that the wizard doesn't show (certifications,
+ * contract_requirements, conditions) are preserved.
+ */
 export async function saveProfile(profile: Partial<ScreeningProfile>): Promise<ScreeningProfile> {
 	const res = await authFetch(`${API_URL}/api/screening/profile`, {
-		method: 'PUT',
+		method: 'PATCH',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(profile)
 	});

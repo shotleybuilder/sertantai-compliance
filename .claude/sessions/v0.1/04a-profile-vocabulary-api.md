@@ -23,18 +23,26 @@ Taken together, QQ's profile barely touches the trees.
 
 - ✅ Corpus-derived vocabulary (`Fitness.Vocabulary`: 727 codes, cached 10 min; normalise/lookup/suggest/route). Still to do for the API: definitions + field grouping in `GET /vocabulary`. codes per evaluator dimension (from compiled trees), with law counts, definitions where available, and the profile field → dimension mapping
 - ✅ Fix the dimension mapping (`profile_from_screening/2` routes via vocabulary + strips actor prefixes) so profile fields reach the dimension the trees use (e.g. premises/ship/aircraft are `territorial` in trees but `locations` → `material` in the profile)
-- ⬜ Persist conditional answers (`conditions` field + migration; 73 laws / 88 Match nodes use `conditional`); wire the wizard's unbound checkboxes
-- ⬜ Ash actions as the API foundation (MCP-ready for `ash_ai` in v0.2): `replace`, `patch` (only given keys change), vocabulary validation with closest-match suggestions, action/argument descriptions
-- ⬜ REST: `PUT /profile` (replace; stop dropping `certifications`/`contract_requirements`), `PATCH /profile`, self-describing `GET /vocabulary`, `POST /profile/validate`; keep `POST /evaluate` dry-run
+- ✅ Persist conditional answers: `conditions` field + idempotent migration (`20260925095810`), routed to `conditional`
+- ⬜ Wire the wizard's unbound conditional-question checkboxes to `conditions`
+- ✅ Ash actions as the API foundation (MCP-ready for `ash_ai` in v0.2): `:upsert` (replace), `:patch`, generic `:vocabulary` and `:check` actions with AI-oriented descriptions; `Fitness.ProfileCheck`
+- ✅ REST: `PUT /profile` (replace, all fields), `PATCH /profile`, `POST /profile/check`, `GET /vocabulary` + `about`/`fields`/`dimensions`; unknown values stored with `warnings`, `?strict=true` rejects (422); wizard saves via PATCH so API-only fields survive
 - ⬜ OpenAPI spec for the profile + evaluate endpoints
 - ⬜ Wizard uses the corpus vocabulary instead of hard-coded lists
 - ⬜ Build QQ's reviewed profile **via the API** (dogfood as an AI client) from independent QQ evidence, not from its legacy register; user corrects it
-- ⬜ Tests for validation, patch semantics, mapping
+- ✅ Tests: Vocabulary (normalise/route/suggest), profile_from_screening/2 routing, profile API (PUT/PATCH/check/strict/vocabulary): 64 passing
 
 ## Dependencies
 
 - ✅ v0.1-01 CI green
 - ⬜ Check whether sertantai-legal also migrates `org_screening_profiles` (shared dev DB) before adding a column
+
+## API design notes
+
+- **Unknown values are stored, with warnings, not rejected by default.** A value the trees don't use (e.g. `laboratory`) may be a true fact about the org, and legal may add the code later. Rejecting it would lose information. AI clients get `warnings` with suggestions on every save; `?strict=true` rejects instead.
+- **PUT replaces, PATCH merges.** The wizard now saves via PATCH, because it only loads the fields it shows. With PUT it would wipe `certifications`, `contract_requirements` and `conditions` set through the API.
+- **MCP foundation.** The profile resource's generic actions (`:vocabulary`, `:check`) and `:upsert`/`:patch` carry descriptions written for AI clients. `ash_ai` can expose them as tools in v0.2 with the actor → org scoping added then.
+- **Tests.** `vocabulary_cache_ttl_ms: 0` in test config, so sandboxed tests never read another test's cached vocabulary. Tree fixtures must be inserted as maps: `Jason.encode!` + `::jsonb` stores a JSON *string* scalar that the SQL walk skips (all 694 real trees are objects).
 
 ## Findings (2026-09-25)
 

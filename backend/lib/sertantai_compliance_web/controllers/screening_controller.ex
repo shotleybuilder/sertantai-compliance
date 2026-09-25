@@ -6,6 +6,7 @@ defmodule SertantaiComplianceWeb.ScreeningController do
   """
   use SertantaiComplianceWeb, :controller
 
+  alias SertantaiCompliance.Fitness.ProfileCheck
   alias SertantaiCompliance.Repo
   alias SertantaiCompliance.Sync.OrgApplicability
   alias SertantaiCompliance.Sync.OrgScreeningProfile
@@ -391,39 +392,80 @@ defmodule SertantaiComplianceWeb.ScreeningController do
 
       {:error, _} ->
         # No profile yet — return empty defaults
-        json(conn, %{
-          regions: [],
-          activities: [],
-          locations: [],
-          materials: [],
-          processes: [],
-          sector: []
-        })
+        json(conn, Map.new(ProfileCheck.profile_fields(), &{&1, []}))
     end
   end
 
-  @doc "PUT /api/screening/profile — create or update org's screening profile"
+  @doc """
+  PUT /api/screening/profile — create or fully replace the org's profile.
+
+  Fields not given are reset to empty. Unknown vocabulary values are stored and
+  reported in `warnings`; with `?strict=true` the profile is rejected instead.
+  """
   def upsert_profile(conn, params) do
+    attrs =
+      ProfileCheck.profile_fields()
+      |> Map.new(&{&1, list_param(params, &1)})
+      |> Map.put(:organization_id, conn.assigns.organization_id)
+
+    save_profile(conn, params, attrs, &OrgScreeningProfile.upsert/1)
+  end
+
+  @doc """
+  PATCH /api/screening/profile — change only the fields given.
+
+  Creates the profile if the org has none. Same `warnings` / `?strict=true`
+  behaviour as PUT.
+  """
+  def patch_profile(conn, params) do
     org_id = conn.assigns.organization_id
 
-    attrs = %{
-      organization_id: org_id,
-      regions: params["regions"] || [],
-      governed_actors: params["governed_actors"] || [],
-      government_actors: params["government_actors"] || [],
-      activities: params["activities"] || [],
-      locations: params["locations"] || [],
-      materials: params["materials"] || [],
-      processes: params["processes"] || [],
-      sector: params["sector"] || []
-    }
+    attrs =
+      ProfileCheck.profile_fields()
+      |> Enum.filter(&Map.has_key?(params, to_string(&1)))
+      |> Map.new(&{&1, list_param(params, &1)})
 
-    case OrgScreeningProfile.upsert(attrs) do
-      {:ok, profile} ->
-        json(conn, serialize_profile(profile))
+    save =
+      case OrgScreeningProfile.by_organization(org_id) do
+        {:ok, existing} -> &OrgScreeningProfile.patch(existing, &1)
+        _ -> &OrgScreeningProfile.upsert(Map.put(&1, :organization_id, org_id))
+      end
 
-      {:error, reason} ->
-        conn |> put_status(422) |> json(%{error: inspect(reason)})
+    save_profile(conn, params, attrs, save)
+  end
+
+  @doc """
+  POST /api/screening/profile/check — check a profile (full or partial)
+  against the vocabulary without saving it.
+  """
+  def check_profile(conn, params) do
+    profile = Map.get(params, "profile", params)
+    {:ok, result} = OrgScreeningProfile.check(profile)
+    json(conn, result)
+  end
+
+  defp save_profile(conn, params, attrs, save) do
+    {:ok, check} = OrgScreeningProfile.check(attrs)
+
+    if strict?(params) and not check.valid do
+      conn |> put_status(422) |> json(Map.put(check, :error, "unknown vocabulary values"))
+    else
+      case save.(attrs) do
+        {:ok, profile} ->
+          json(conn, Map.put(serialize_profile(profile), :warnings, check.unknown))
+
+        {:error, reason} ->
+          conn |> put_status(422) |> json(%{error: inspect(reason)})
+      end
+    end
+  end
+
+  defp strict?(params), do: params["strict"] in ["true", true]
+
+  defp list_param(params, field) do
+    case Map.get(params, to_string(field)) do
+      values when is_list(values) -> Enum.filter(values, &is_binary/1)
+      _ -> []
     end
   end
 
@@ -447,12 +489,19 @@ defmodule SertantaiComplianceWeb.ScreeningController do
         _ -> []
       end
 
-    vocab = %{
-      "governed_actors" => governed_actors,
-      "government_actors" => government_actors,
-      "fitness_entities" => fitness_entities,
-      "regions" => regions
-    }
+    # Wizard keys (legacy) + self-describing tree vocabulary for API/AI clients
+    {:ok, described} = OrgScreeningProfile.vocabulary()
+
+    vocab =
+      Map.merge(
+        %{
+          "governed_actors" => governed_actors,
+          "government_actors" => government_actors,
+          "fitness_entities" => fitness_entities,
+          "regions" => regions
+        },
+        described
+      )
 
     json(conn, vocab)
   end
@@ -799,6 +848,9 @@ defmodule SertantaiComplianceWeb.ScreeningController do
       materials: profile.materials || [],
       processes: profile.processes || [],
       sector: profile.sector || [],
+      certifications: profile.certifications || [],
+      contract_requirements: profile.contract_requirements || [],
+      conditions: profile.conditions || [],
       inserted_at: profile.inserted_at,
       updated_at: profile.updated_at
     }

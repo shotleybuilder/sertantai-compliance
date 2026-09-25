@@ -26,3 +26,7 @@ config :logger, level: :warning
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
+
+# Rebuild the screening vocabulary on every call so sandboxed tests never
+# see another test's cached corpus.
+config :sertantai_compliance, vocabulary_cache_ttl_ms: 0

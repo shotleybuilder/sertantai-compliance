@@ -22,7 +22,7 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 
 - ✅ **npm audit**: 10 → 5 with non-breaking `npm audit fix` (js-yaml, nanoid, devalue, vitest, @vitest/mocker); Vite dev server now binds localhost by default (`VITE_DEV_HOST` to override; set in `docker-compose.dev.yml`)
 - ⏸️ **Svelte 5 / GridLite 0.10 / Vite 8 upgrade** clears the remaining 5. **Deferred until after v0.1** (user, 2026-09-25): pending session `2026-09-25-svelte5-gridlite-upgrade.md`
-- ✅ **Backups live on prod** 2026-09-25: stack `afa225d` pulled, `backup` container running (daily 02:00 UTC), both restic repos initialised, first backup (23 s) and restore drill (39 s) pass. Remaining: box **automatic snapshots** (user, Hetzner console) and the freshness alert (monitoring item)
+- ✅ **Backups live on prod** 2026-09-25: stack `afa225d` pulled, `backup` container running (daily 02:00 UTC), both restic repos initialised, first backup (23 s) and restore drill (39 s) pass. Storage Box **automatic snapshots enabled** (daily 03:00 UTC, keep 10; 10 is the 1 TB plan's maximum). Remaining: freshness alert (monitoring item)
 - ⬜ **NAS copy** (user's home NAS pulls from the Storage Box, read-only sub-account): third copy outside Hetzner
 - ✅ **IDB isolation**: already scoped per org in `pglite/client.ts` (IDB name from the JWT `org_id`; the #106 fix was ported earlier)
 - ✅ **Electric proxy cross-tenant leak (critical, fixed 2026-09-25)**: see below

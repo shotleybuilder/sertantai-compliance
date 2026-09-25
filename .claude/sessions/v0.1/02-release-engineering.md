@@ -1,19 +1,94 @@
 ---
 session: "v0.1-02: Release Engineering"
-status: active
+status: closed
 opened: 2026-09-25
+closed: 2026-09-25
+outcome: success
 parent: v0.1/meta.md
-depends_on: ["v0.1/01-housekeeping-ci"]
 
 summary: >
-  Set up SemVer, CHANGELOG, a version bump script, immutable image tags, a
-  release runbook, and the v0.1 GitHub milestone. This is the first tagged
-  release in the SertantAI ecosystem, so it sets the convention.
+  Every prod deploy is now a tagged, pinned release. release.sh bumps backend
+  and frontend together, maintains a customer-readable CHANGELOG and tags;
+  images carry the version and sha tags; deploy-prod.sh requires --version,
+  backs up the shared DB before backend deploys, pins the server .env, logs the
+  deploy and verifies /health. Rehearsed end to end on a throwaway branch;
+  runbook reviewed by the user. Nothing was run against prod.
+
+decisions:
+  - what: One version for the whole app, in mix.exs and package.json, bumped together
+    why: The stack compose pins both images with a single SERTANTAI_COMPLIANCE_VERSION
+    result: release.sh bumps both; CI fails on a mismatch; partial deploys warn
+  - what: Hand-written, customer-readable changelog instead of git-cliff
+    why: git-cliff isn't installed, and QQ needs curated notes rather than a commit list
+    result: release.sh prints commits since the last tag as a checklist; tag annotations carry the notes for gh release --notes-from-tag
+  - what: Release candidates don't touch the changelog
+    why: Otherwise every rc leaves a fragment of notes and the final section is incomplete
+    result: rc tags list Unreleased; the final X.Y.Z moves it into a dated section
+  - what: Refuse latest everywhere; tag images X.Y.Z plus sha-<commit>
+    why: We must know what runs in prod and be able to roll back to a known version
+    result: scripts/deployment/lib/version.sh (release_version, sha_tag, check_image_tag)
+  - what: Automatic pg_dump before backend deploys (opt out with --skip-backup)
+    why: The backend runs migrations on container start, and the stack's backup scripts are Baserow-only
+    result: Dump of sertantai_legal_prod to ~/backups/compliance/ on the server; the restore command is printed; quoting verified locally
+  - what: Defer the tag-triggered CI image build
+    why: GHCR packages were created with a personal token; Actions needs package permissions set up first
+    result: Images are built and pushed locally from the tagged commit, per the runbook
+
+metrics:
+  dry_run: { rc_files_changed: 3, final_changelog_moved: true, guards_verified: 4 }
+  tests: { backend_health_version: 1 }
+  milestone: { title: v0.1, due: "2026-10-27", issues: 1 }
+
+lessons:
+  - title: "The sertantai-stack scripts are Baserow-only"
+    detail: "backup.sh, restore.sh, deploy.sh and update.sh in sertantai-stack only handle Baserow, so nothing backed up the shared sertantai_legal_prod database compliance uses. Check what an infra script actually covers before planning around it."
+    tag: infrastructure
+  - title: "Prod compliance uses sertantai_legal_prod, not sertantai_compliance_prod"
+    detail: "The stack compose points compliance's DATABASE_URL at sertantai_legal_prod in shared_postgres. Restoring a backup therefore affects sertantai-legal too; coordinate, and prefer fixing forward."
+    tag: deployment
+  - title: "A failure inside $(...) passed as an argument doesn't fail a CI step"
+    detail: "echo \"$(release_version)\" succeeds even when release_version fails. Assign first (version=\"$(release_version)\"), which propagates the failure under bash -e."
+    tag: tooling
+  - title: "svelte-check doesn't see ambient globals in templates"
+    detail: "A Vite define (__APP_VERSION__) declared in app.d.ts works in script but warns in markup. Read it into a script constant."
+    tag: tooling
+  - title: "Never probe a mutating script by running it"
+    detail: "A check meant to show release.sh would proceed on main actually ran it; head -1 happened to kill it (SIGPIPE) before any change. Read the guard code or rehearse on a throwaway branch."
+    tag: tooling
+  - title: "git add <dir> sweeps in other sessions' outputs"
+    detail: "The tooling commit picked up the legal session's benchmark run. Removed by amending the unpushed commit; .gitignore now excludes runs/*-legal-*/. Stage explicit paths."
+    tag: tooling
+
+artifacts:
+  - CHANGELOG.md
+  - docs/RELEASING.md
+  - scripts/release.sh
+  - scripts/deployment/lib/version.sh
+  - scripts/deployment/build-backend.sh
+  - scripts/deployment/build-frontend.sh
+  - scripts/deployment/push-backend.sh
+  - scripts/deployment/push-frontend.sh
+  - scripts/deployment/deploy-prod.sh
+  - backend/lib/sertantai_compliance_web/controllers/health_controller.ex
+  - backend/test/sertantai_compliance_web/controllers/health_controller_test.exs
+  - frontend/vite.config.ts
+  - frontend/src/app.d.ts
+  - frontend/src/routes/app/+layout.svelte
+  - .github/workflows/ci.yml
+  - .gitignore
+
+depends_on:
+  - v0.1/01-housekeeping-ci.md
+
+enables:
+  - "v0.1-09: cut v0.1.0-rc.1 with scripts/release.sh and deploy it pinned"
+  - "v0.1-10: v0.1.0 release and GitHub Release from the tag notes"
+  - "v0.1-08: backups now exist for backend deploys; scheduled backups still needed"
 ---
 
-# Session: Release Engineering (ACTIVE)
+# Session: Release Engineering (CLOSED)
 
-> **Resumed 2026-09-25.** Release tooling can be built and dry-run now. The first real deploy of a tagged release waits on prod data (session 03).
+> The first real deploy of a tagged release waits on prod data (session 03); cut rc.1 in session 09.
 
 ## Problem
 

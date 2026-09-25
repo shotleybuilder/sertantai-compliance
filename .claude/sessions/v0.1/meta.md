@@ -21,7 +21,7 @@ they are resumed.
 | # | Session | Status | Depends On | Week | Key Deliverables |
 |---|---------|--------|------------|------|------------------|
 | 1 | [Housekeeping & CI Green](./01-housekeeping-ci.md) | **closed** | — | 0 | Uncommitted work landed, CI green, stale issues closed |
-| 2 | [Release Engineering](./02-release-engineering.md) | **active** | 1 | 0 | CHANGELOG, version script, tagged images, RELEASING.md, milestone |
+| 2 | [Release Engineering](./02-release-engineering.md) | **closed** | 1 | 0 | CHANGELOG, version script, tagged images, RELEASING.md, milestone |
 | 3 | [Prod Data Unblock](./03-prod-data-unblock.md) | pending | legal#133, legal#27 | 0 | Electric shapes load in prod with current data |
 | 4a | [Profile Vocabulary & API](./04a-profile-vocabulary-api.md) | suspended | 1 | 0–1 | Corpus vocabulary, dimension mapping fix, conditions, MCP-ready Ash actions, REST + OpenAPI, QQ profile via API |
 | 4 | [Screener Benchmark Harness](./04-screener-benchmark.md) | **closed** | 4a | 0 | `mix screener.benchmark`, first QQ confusion matrix |

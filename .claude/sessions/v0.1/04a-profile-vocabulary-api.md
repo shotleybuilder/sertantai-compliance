@@ -29,7 +29,7 @@ Taken together, QQ's profile barely touches the trees.
 - ✅ REST: `PUT /profile` (replace, all fields), `PATCH /profile`, `POST /profile/check`, `GET /vocabulary` + `about`/`fields`/`dimensions`; unknown values stored with `warnings`, `?strict=true` rejects (422); wizard saves via PATCH so API-only fields survive
 - ⬜ OpenAPI spec for the profile + evaluate endpoints
 - ⬜ Wizard uses the corpus vocabulary instead of hard-coded lists
-- ⬜ (draft done, awaiting user correction) Build QQ's reviewed profile **via the API** (dogfood as an AI client) from independent QQ evidence, not from its legacy register; user corrects it
+- ✅ Built QQ's reviewed profile **via the API** (dogfood as an AI client) from independent QQ evidence, not from its legacy register; user corrects it
 - ✅ Tests: Vocabulary (normalise/route/suggest), profile_from_screening/2 routing, profile API (PUT/PATCH/check/strict/vocabulary): 64 passing
 
 ## Dependencies
@@ -102,7 +102,9 @@ The QQ tags that are still unknown need semantic review, not string matching: `l
 
 ## QQ profile draft (2026-09-25)
 
-Built from independent evidence: Enhesa site "Last Comment" text (Farnborough 830 rows, Fort Halstead 442), conditional requirement text Enhesa marked applicable per site, and QQ's BMS categories (semi-independent). **Not** from the legacy register. Checked with `OrgScreeningProfile.check/1` and dry-run evaluated. **Not saved**; awaiting user correction. Draft: `backend/priv/benchmarks/qq/profile_draft.json`.
+Built from independent evidence: Enhesa site "Last Comment" text (Farnborough 830 rows, Fort Halstead 442), conditional requirement text Enhesa marked applicable per site, and QQ's BMS categories (semi-independent). **Not** from the legacy register. Checked with `OrgScreeningProfile.check/1` and dry-run evaluated. **Approved by the user as-is and saved on 2026-09-25** via `OrgScreeningProfile.upsert/1` (dev DB, profile `10b5f255…`). Snapshots for the benchmark: `backend/priv/benchmarks/qq/profile_as_found.json` (before) and `profile_reviewed.json` (saved).
+
+User note: the remaining gaps are tree data, e.g. carriage and waste laws have a consignee in legal's actor library that doesn't reach the trees (Consignor is still a warning here).
 
 Key choices:
 - `government_actors` is empty (the as-found profile had HSE and supply-chain roles).

@@ -24,8 +24,9 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 - ⬜ **Backups**: the stack's backup/restore scripts are Baserow-only (found in 02). `deploy-prod.sh` now dumps `sertantai_legal_prod` before backend deploys; still needed: **scheduled** dumps, retention, off-server copies, and a tested restore, agreed with legal (shared DB)
 - ✅ **IDB isolation**: already scoped per org in `pglite/client.ts` (IDB name from the JWT `org_id`; the #106 fix was ported earlier)
 - ✅ **Electric proxy cross-tenant leak (critical, fixed 2026-09-25)**: see below
-- ⬜ Hotfix to prod (live since the August deploy) and a check of prod exposure: user's decision
-- ⬜ Browser check: signed in, the browse page still syncs org_applicabilities (live polls now go through the Gatekeeper)
+- ✅ Prod compliance **stopped** 2026-09-25 13:26 UTC (user's decision) until the fix is deployed: backend, frontend and Electric (`docker compose stop`; containers kept). Both leak paths now return 502. Prod exposure was not probed.
+- ⬜ Deploy the fix via a pinned release (`deploy-prod.sh --version …`, which starts the containers again); then re-baseline change detection after legal#27's data sync
+- ✅ Browser check (user): `/browse` still syncs in dev with Gatekeeper-validated live polls
 - ⬜ **Real-user auth**: an actual QQ user account goes hub → auth → compliance end to end. Check token refresh, logout, and org scoping on every API route and Electric shape (legal#29, #36, #47).
 - ⬜ **Monitoring**: uptime check on `/health`, error tracking (backend and frontend), and log retention.
 - ⬜ **Performance**: first-load sync time for browse and glossary on a typical corporate laptop and network.
@@ -47,3 +48,10 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 - Verified on the running dev server: the exploit now gets 401, and public tables still get 200.
 
 **Follow-up.** Live polls on org shapes now make a Gatekeeper call each. Watch latency and auth load.
+
+### Prod stop (2026-09-25)
+
+- Stopped `sertantai-compliance`, `sertantai-compliance-frontend` and `sertantai-compliance-electric` on sertantai-hz with `docker compose stop`. The event is logged in `~/infrastructure/docker/compliance-deploy-history.log`.
+- Both paths were closed: the backend proxy (`/api/electric/...`), and **nginx's direct `/electric/` route to compliance's Electric container** (sertantai-stack `nginx/conf.d/compliance.sertantai.com.conf`). The direct route bypasses the backend proxy entirely, so check whether it should exist before restarting.
+- **Restart trap:** nginx `depends_on` includes the compliance services, so `docker compose up -d nginx` without `--no-deps` would start them again. Restart nginx with `--no-deps` (or `docker compose restart nginx`) until the fix is deployed.
+- Unrelated, pre-existing: the **sertantai-legal prod container is in a crash loop** (67,113 restarts; `BadBooleanError` at `application.ex:30`, re-running migrations on each boot). Reported to the user; legal's side to decide.

@@ -22,6 +22,7 @@ Even after the migration, prod data won't have the July enrichment unless the de
 
 ## Todo
 
+- ⬜ Use `~/Desktop/sertantai-stack/scripts/backup.sh` (and check `restore.sh` works) for the prod DB backup
 - ⬜ **Back up the prod DB** before anything else. Record where the backup is stored.
 - ⬜ legal#133: run the 5 migrations in order:
   1. `20260518000001_partition_legal_register`

@@ -14,6 +14,8 @@ summary: >
 
 ## Outline (refine when the session starts)
 
+- ⬜ **npm audit**: 10 vulnerabilities (3 high: js-yaml, nanoid; moderate: svelte ≤5.55.6, cookie, devalue, esbuild, vitest), found in v0.1-01
+- ⬜ **Backups**: build on `~/Desktop/sertantai-stack/scripts/backup.sh` / `restore.sh`
 - ⬜ **IDB isolation**: sertantai-legal#106 found the PGLite IndexedDB store shared across users on the same origin. Check compliance's `pglite/client.ts`.
   - If it's affected, scope the IDB name per user/org and wipe it on logout.
   - This must be done before a second QQ user logs in.

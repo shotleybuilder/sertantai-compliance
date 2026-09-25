@@ -1,7 +1,9 @@
 ---
 session: Applicability Filter — Meta Session
 type: meta
-status: open
+status: closed
+closed: 2026-09-25
+superseded_by: v0.1/meta.md
 opened: 2026-08-06
 plan: .claude/plans/applicability-filter.md
 
@@ -10,6 +12,8 @@ summary: >
   evaluation engine with explainability, screener results UI, register access
   control, provision drill-down, and sync pipeline integration.
 ---
+
+> **Superseded 2026-09-25** by the [v0.1 release plan](../v0.1/meta.md). 04 (access control) moves post-v0.1, still blocked on auth#20/hub#22. 06 (integration polish) is absorbed into v0.1 sessions 05, 08 and 09.
 
 ## Implementation Sessions
 

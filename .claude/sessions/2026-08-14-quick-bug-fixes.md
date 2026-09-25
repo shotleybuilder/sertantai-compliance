@@ -1,10 +1,17 @@
 ---
 session: Quick Bug Fixes
-status: suspended
+status: closed
 opened: 2026-08-14
+closed: 2026-09-25
+outcome: partial
+
+summary: >
+  Fixed #19, #4, #5 and the #6 top-line Venn stats. The Screener Gaps drill-down
+  was deferred to GH #23 and will reuse the cause classification from the
+  v0.1-04 benchmark.
 ---
 
-# Session: Quick Bug Fixes (SUSPENDED)
+# Session: Quick Bug Fixes (CLOSED)
 
 > **Suspended 2026-08-14**: Top-line Venn stats shipped on both screening page and `/app/stats` dashboard. Remaining work: Screener Gaps drill-down panel on `/app/stats` with false positive/negative investigation.
 

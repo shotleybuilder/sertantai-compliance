@@ -19,6 +19,7 @@ There are no tags and no changelog, and images are pushed as `:latest`. That mea
 
 ## Todo
 
+- ⬜ Prod deploy config lives in `~/Desktop/sertantai-stack`. Both compliance images are already `:${SERTANTAI_COMPLIANCE_VERSION:-latest}` in `docker/docker-compose.yml`, so pinning a release means setting that variable in the server `.env`. Align `deploy-prod.sh` with the stack's `scripts/deploy.sh` / `update.sh` rather than duplicating them
 - ⬜ `CHANGELOG.md` at the repo root in Keep a Changelog format.
   - Seed an `Unreleased` section from the git history since `cb5ad75`, grouped by Added / Changed / Fixed.
   - Write it for customers, not as a commit dump.

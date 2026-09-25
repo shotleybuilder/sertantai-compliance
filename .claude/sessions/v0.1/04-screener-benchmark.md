@@ -1,6 +1,6 @@
 ---
 session: "v0.1-04: Screener Benchmark Harness"
-status: suspended
+status: active
 opened: 2026-09-25
 parent: v0.1/meta.md
 depends_on: ["v0.1/04a-profile-vocabulary-api"]
@@ -11,9 +11,9 @@ summary: >
   Every data fix in session 06 is judged by this benchmark.
 ---
 
-# Session: Screener Benchmark Harness (SUSPENDED)
+# Session: Screener Benchmark Harness (ACTIVE)
 
-> **Suspended 2026-09-25**: profile first. QQ's profile vocabulary barely matches the expression trees (see 04a), so benchmarking now would measure the profile, not the screener. Resume once 04a has produced a reviewed QQ profile.
+> **Resumed 2026-09-25**: 04a fixed vocabulary routing and saved QQ's reviewed profile. Dry runs show the trees are now the limiting factor, so the benchmark's job is to attribute each disagreement to a cause and rank the causes for sertantai-legal#161.
 
 ## Problem
 
@@ -25,16 +25,16 @@ Screener accuracy has only been judged by eye, plus a one-off Enhesa report in J
 
 - ⬜ Extract the screening run (corpus query + `evaluate_batch_with_reasons`) from `ScreeningController.evaluate/2` into a shared module, so the benchmark measures exactly what users see
 - ⬜ Reference fixture: snapshot the QQ legacy register (yes/no, source, corpus bucket) to `backend/priv/benchmarks/qq/legacy_register.csv`, so it's versioned and independent of DB drift
-- ⬜ `mix screener.benchmark`: agreement matrix (both / register-only / screener-only / neither), broken down by tier, family and jurisdiction; a triage CSV for every diff with a probable side (`register_error`: revoked, not_making; `screener_gap`: no_tree, profile_gap, tree_condition_miss; `unknown`); dated markdown summary; diff vs the previous run
-- ⬜ Use the reviewed QQ profile from 04a
-- ⬜ Baseline run recorded (old profile vs reviewed profile) with FN causes ranked; post the results to sertantai-legal#161
+- ⬜ `mix screener.benchmark`: agreement matrix (both / register-only / screener-only / neither), broken down by tier, family and jurisdiction; a triage CSV for every diff with a probable cause, on three sides: **register** (revoked, not_making), **tree** (no_tree, territory_only_tree, generic_code_gate, vocabulary_gap, construction_misfire, gov_actor_gate), **profile** (profile_gap); dated markdown summary; diff vs the previous run
+- ✅ Reviewed QQ profile saved (04a); snapshots in `backend/priv/benchmarks/qq/profile_as_found.json` and `profile_reviewed.json`, so the benchmark can run both
+- ⬜ Baseline run recorded (as-found vs reviewed profile) with causes ranked; post the ranked causes to sertantai-legal#161
 - ⬜ (Optional for v0.1) Reuse the cause classification in #23 Screener Gaps drill-down
 
 ## Dependencies
 
 - ✅ v0.1-01 CI green (closed)
 - ✅ QQ ground truth in dev DB (711 org_applicabilities)
-- ⬜ v0.1-04a Profile Vocabulary & API (reviewed QQ profile)
+- ✅ v0.1-04a Profile Vocabulary & API (reviewed QQ profile saved; 04a suspended with non-blocking items)
 
 ## QQ legacy register (dev DB, 2026-09-25)
 

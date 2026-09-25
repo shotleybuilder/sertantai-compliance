@@ -5,7 +5,7 @@ A production-ready starter template for building full-stack, real-time, offline-
 ## Tech Stack
 
 **Backend:**
-- [Elixir](https://elixir-lang.org/) 1.16+ / Erlang OTP 26+
+- [Elixir](https://elixir-lang.org/) 1.20 / Erlang OTP 29 (pinned in `.tool-versions`)
 - [Phoenix Framework](https://phoenixframework.org/) 1.7+
 - [Ash Framework](https://hexdocs.pm/ash) 3.0+ (declarative resource framework)
 - PostgreSQL 15+ with logical replication
@@ -40,7 +40,7 @@ A production-ready starter template for building full-stack, real-time, offline-
 ### Prerequisites
 
 - Docker & Docker Compose
-- Elixir 1.16+ / Erlang OTP 26+
+- Elixir 1.20 / Erlang OTP 29 (see `.tool-versions`)
 - Node.js 20+
 - PostgreSQL 15+ (or use Docker)
 

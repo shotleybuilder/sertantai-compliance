@@ -29,7 +29,8 @@ Nothing in v0.1 can be trusted while CI is red, and there is loose state left ov
 - ✅ Frontend deploy path is the Docker image via sertantai-stack; removed the Cloudflare workflow
 - ✅ Align hooks and CI: security steps made blocking with the same config; dead `usage_rules.check` step removed
 - ✅ Upgrade Ash 3.27.7 → 3.33.11 (security advisory) + ash-functions v6 migration
-- ⬜ All workflows green on `main`
+- ✅ Migrate to Elixir 1.20.4 / OTP 29.1.1 (local, CI, Docker, `.tool-versions`)
+- ⬜ All workflows green on `main` (push blocked: gh token needs `workflow` scope)
 
 ## Dependencies
 
@@ -58,9 +59,16 @@ Nothing in v0.1 can be trusted while CI is red, and there is loose state left ov
 - Generated `upgrade_ash_functions_v6` extension migration (`ash_required/2`, `CREATE OR REPLACE`). sertantai-legal is already on ash-functions v6 and the function already exists in the shared dev DB, so the migration is harmless there. No `Legal.*` resource migrations were generated.
 - 44/44 backend tests pass; `ash.codegen --check` is clean.
 
-### Toolchain drift (not fixed, noted)
+### Elixir 1.20.4 / OTP 29 migration
 
-Local is Elixir 1.20.4 / OTP 29, while CI and Docker are 1.18.4 / OTP 27. Locally, Dialyzer reports 13 extra `call_without_opaque` warnings on `MapSet` (false positives on newer OTP) and 1.20's type checker adds warnings. Consider a `.tool-versions` pin (asdf/mise) so local matches prod.
+The OS upgrade moved local to Elixir 1.20.4 / OTP 29.1.1, so the project was migrated to match rather than pinning back to 1.18/27.
+- **Deps**: all compile on 1.20/29. There are 61 warnings, all inside third-party packages: new type-checker findings (redundant clauses, unused requires) and `xref: [exclude:]` deprecations. Nothing breaking.
+- **Our code**: `--warnings-as-errors` is clean; 44/44 tests pass.
+- **Dialyzer**: 13 `call_without_opaque` false positives on idiomatic `MapSet` calls. This is a known OTP 28+ issue (elixir-lang/elixir#14750, #14576), where MapSet wraps the opaque `:sets.set`. A `@spec` doesn't help. Ignored narrowly per file in `.dialyzer_ignore.exs`, as the community recommends. Also bumped dialyxir 1.4.7 → 1.4.8.
+- **Pins**: `ci.yml` 1.20.4 / 29.1.1 (builds.hex.pm has OTP-29.1.1 for ubuntu-24.04); `mix.exs` `elixir: "~> 1.20"`; `.tool-versions` added; README updated.
+- **Docker**: builder `elixir:1.20.4-otp-29-alpine`, which is Alpine 3.24.2, so runtime moved `alpine:3.23` → `3.24` (shared OpenSSL/ncurses). Added `lksctp-tools`, because OTP 29 tries to load `libsctp` at boot and logs an error without it.
+- **Verified**: the image builds. The container ran against the dev DB: migrations "already up", `/health` ok in 3s, `/health/detailed` reports OTP 29 / Elixir 1.20.4 / DB healthy, Docker HEALTHCHECK healthy, OpenSSL 3.5.8, `:ssl` starts.
+- **pre-push hook**: Dialyzer is now **blocking** (same as CI). A stale PLT ("Old PLT file") fails with a rebuild hint instead of being skipped silently, which is how the stale PLT went unnoticed on 2026-09-25.
 
 ### Moved to other sessions
 

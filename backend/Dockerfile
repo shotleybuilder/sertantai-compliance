@@ -1,7 +1,7 @@
 ################################################################################
 # Builder Stage
 ################################################################################
-FROM elixir:1.18.4-alpine AS builder
+FROM elixir:1.20.4-otp-29-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -41,7 +41,8 @@ RUN mix release
 ################################################################################
 # Runner Stage
 ################################################################################
-FROM alpine:3.23
+# Must match the builder image's Alpine release (shared OpenSSL/ncurses libs)
+FROM alpine:3.24
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -49,6 +50,7 @@ RUN apk add --no-cache \
     ncurses-libs \
     libstdc++ \
     libgcc \
+    lksctp-tools \
     postgresql-client \
     bash
 

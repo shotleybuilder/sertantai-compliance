@@ -112,3 +112,12 @@ Beyond the Electric proxy leak (fixed earlier):
 | 12 | Within an org, every authenticated user can write the register (access control deferred, fitness 04) | Product | v0.1 treats QQ users as trusted editors |
 
 Tests: 98 backend (4 new AuthPlug). Credo and Dialyzer clean.
+
+## sertantai-stack security changes (2026-09-25, `7975ecb`, pushed, not pulled on the server)
+
+- Removed nginx `location /electric/` and its upstream: it went straight to compliance's Electric, bypassing the API proxy.
+- Added `Strict-Transport-Security: max-age=31536000` (no includeSubDomains/preload).
+- Added `Content-Security-Policy-Report-Only`: `'self'`, `'unsafe-inline'` scripts (static SvelteKit bootstrap), `'wasm-unsafe-eval'` (PGLite), `connect-src 'self'` (the API is same-origin). Enforce after the rc shows no console violations.
+- `location = /health/detailed { return 404; }`: node name, versions and DB status are no longer public. Internal callers (hub health proxy, monitoring) use the Docker network.
+- `sertantai-compliance-electric` pinned by digest to the image prod ran (`sha256:5d85702c…`, built 2026-02-12).
+- Validated with `nginx -t` (dummy certs, stand-in hosts), plus a local functional run with host networking against the dev backend: /health 200, /health/detailed 404, HSTS and CSP-RO headers present, /electric/ no longer reaches Electric.

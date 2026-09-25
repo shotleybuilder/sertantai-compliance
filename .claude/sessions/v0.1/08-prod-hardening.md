@@ -29,7 +29,7 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 - ⬜ Deploy the fix via a pinned release (`deploy-prod.sh --version …`, which starts the containers again); then re-baseline change detection after legal#27's data sync
 - ✅ Browser check (user): `/browse` still syncs in dev with Gatekeeper-validated live polls
 - ✅ **Hub Compliance tile** (sertantai-hub `63e3ba8`, pushed; images `:latest` + `:sha-63e3ba8` published): `COMPLIANCE_URL` → `/app/screening` via `/auth/callback`; health proxy `compliance` entry; Controls defaults moved to 5177/4007
-- ⬜ Local: legal's `docker-compose.services.yml` needs `VITE_COMPLIANCE_URL`, `VITE_CONTROLS_URL=:5177` and `COMPLIANCE_SERVICE_URL`, then recreate the hub services (requested from the legal session); then check the tile
+- ✅ Local: the legal session updated `docker-compose.services.yml` (`VITE_COMPLIANCE_URL`, `VITE_CONTROLS_URL=:5177`, `COMPLIANCE_SERVICE_URL`) and recreated only the hub services. Verified: hub health proxy `compliance` returns ok 0.1.0; `controls` offline (nothing on 4007); frontend runs `sha-63e3ba8` and serves `VITE_COMPLIANCE_URL` in `env-config.js`
 - ⬜ Prod: sertantai-stack `93d6a50` (hub-backend `COMPLIANCE_SERVICE_URL`) is pushed but **not pulled on the server**; pull and recreate hub-backend when compliance is restarted (#25)
 - ⬜ **Real-user auth**: an actual QQ user account goes hub → auth → compliance end to end. Check token refresh, logout, and org scoping on every API route and Electric shape (legal#29, #36, #47).
 - ⬜ **Monitoring**: uptime check on `/health`, error tracking (backend and frontend), and log retention.

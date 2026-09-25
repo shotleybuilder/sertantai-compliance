@@ -10,6 +10,7 @@ defmodule SertantaiCompliance.Application do
     children = [
       SertantaiComplianceWeb.Telemetry,
       SertantaiCompliance.Repo,
+      {Oban, Application.fetch_env!(:sertantai_compliance, Oban)},
       {DNSCluster,
        query: Application.get_env(:sertantai_compliance, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SertantaiCompliance.PubSub},

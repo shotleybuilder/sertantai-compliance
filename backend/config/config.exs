@@ -11,6 +11,16 @@ import Config
 # max_length validation agrees with the database.
 config :ash, default_string_length_count: :codepoints
 
+# Background jobs. Change detection runs daily at 05:00 UTC.
+config :sertantai_compliance, Oban,
+  repo: SertantaiCompliance.Repo,
+  queues: [default: 5],
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 14},
+    {Oban.Plugins.Cron,
+     crontab: [{"0 5 * * *", SertantaiCompliance.Sync.Workers.ChangeDetectionWorker}]}
+  ]
+
 config :sertantai_compliance,
   ecto_repos: [SertantaiCompliance.Repo],
   ash_domains: [SertantaiCompliance.Api, SertantaiCompliance.Sync],

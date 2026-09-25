@@ -30,3 +30,6 @@ config :phoenix, :plug_init_mode, :runtime
 # Rebuild the screening vocabulary on every call so sandboxed tests never
 # see another test's cached corpus.
 config :sertantai_compliance, vocabulary_cache_ttl_ms: 0
+
+# Jobs are only run when a test asks (Oban.Testing).
+config :sertantai_compliance, Oban, testing: :manual

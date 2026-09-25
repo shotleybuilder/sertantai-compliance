@@ -20,5 +20,6 @@ defmodule SertantaiCompliance.Sync do
     resource(SertantaiCompliance.Sync.OrgSecondaryApplicability)
     resource(SertantaiCompliance.Sync.OrgScreeningProfile)
     resource(SertantaiCompliance.Sync.ApplicabilityEvent)
+    resource(SertantaiCompliance.Sync.LawChangeSnapshot)
   end
 end

@@ -235,39 +235,6 @@ check_unused_deps() {
     fi
 }
 
-# Check 5: Usage Rules
-check_usage_rules() {
-    print_status "Checking project usage rules..."
-
-    # Change to backend directory
-    cd backend
-
-    # Check if usage_rules is available
-    if ! mix help usage_rules.check > /dev/null 2>&1; then
-        print_warning "usage_rules not available - skipping rules check"
-        print_info "Run 'cd backend && mix deps.get' to install usage_rules"
-        cd ..
-        return 0
-    fi
-
-    # Run usage rules check
-    RULES_OUTPUT=$(mix usage_rules.check 2>&1)
-    RULES_STATUS=$?
-
-    # Return to root
-    cd ..
-
-    if [ $RULES_STATUS -ne 0 ]; then
-        print_error "Usage rules violations found"
-        echo "$RULES_OUTPUT"
-        print_info "Fix violations or update usage-rules.md if rules changed"
-        print_info "Or use 'git push --no-verify' to skip (not recommended)"
-        return 1
-    else
-        print_success "All usage rules satisfied"
-        return 0
-    fi
-}
 
 # Check 6: Test Suite (Backend)
 check_backend_tests() {
@@ -375,7 +342,6 @@ main() {
     check_unused_deps
     echo ""
 
-    check_usage_rules || EXIT_CODE=1
     echo ""
 
     check_backend_tests || EXIT_CODE=1

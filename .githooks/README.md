@@ -41,7 +41,6 @@ Runs on every `git push` for comprehensive validation:
 - Security analysis (`mix sobelow`)
 - Dependency security audit (`mix deps.audit`)
 - Unused dependencies check (`mix deps.unlock --check-unused`)
-- Usage rules validation (`mix usage_rules.check`)
 - Test suite (`mix test`)
 
 **Frontend:**

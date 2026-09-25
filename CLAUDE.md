@@ -1,258 +1,115 @@
-# Sertantai-Compliance: Customer-Facing Compliance Service
+# SertantAI Compliance
 
-**Service Type**: Production SaaS microservice in the SertantAI ecosystem
-**Domain**: Applicability screening, Baserow sync, change management, compliance workbench
-**Coordinates With**: sertantai-legal (admin data source, shared DB), sertantai-auth (authentication), sertantai-hub (orchestration)
-**Infrastructure**: Shared PostgreSQL via ~/Desktop/infrastructure (production)
+The customer-facing service in the SertantAI ecosystem. It tells an organisation
+which UK laws apply to it (the **screener**), keeps it abreast of **legal change**
+(the change feed), and lets it browse the register and glossary.
 
-## Architecture Context
+| Project | Location | Role |
+|---|---|---|
+| **sertantai-compliance** | this repo | Screener, change feed, browse/glossary, profile API. Reads legal's data. |
+| sertantai-legal | `~/Desktop/sertantai-legal` | Admin/data side: scraping, LAT parsing, expression trees (`compiled_applicability`), definitions. **Owns the legal tables.** |
+| sertantai-auth | `~/Desktop/sertantai-auth` | Identity; issues Ed25519 JWTs (JWKS at `/.well-known/jwks.json`). No API tokens yet. |
+| sertantai-hub | `~/Desktop/sertantai-hub` | Sign-in and service tiles; hands the JWT to services via `/auth/callback`. |
+| sertantai-stack | `~/Desktop/sertantai-stack` | Prod infrastructure: Hetzner, Docker Compose, nginx. Deployed to `~/infrastructure` on the server. |
 
-```
-                    SertantAI Hub (Orchestrator, auth entry point)
-                                    ↓
-           ┌────────────────────────┼────────────────────────┐
-           ↓                        ↓                        ↓
-    sertantai-auth           sertantai-compliance      sertantai-legal
-    (Identity/JWT)           (THIS SERVICE)            (ADMIN — local only)
-                             Production SaaS:          Scraper, LAT parser,
-                             Screening, Sync,          Graph, Enrichment,
-                             Change Mgmt, Browse       Analytics, QA
-```
+## Current focus
 
-**This service provides**:
-- Applicability screening against UK/AU legal register
-- Baserow sync engine with 27 compliance templates
-- Change management (law status changes, new laws, repeals)
-- Public law browse page
-- Sync configuration management
-- AI assessments (future)
+v0.1 ships to QQ (QinetiQ) by 27 Oct 2026; their ENHESA register ends 31 Oct.
+Plan: `.claude/plans/v0.1-release.md`. Sessions and status: `.claude/sessions/v0.1/meta.md`.
+Legal-side data work: sertantai-legal#161.
 
-**This service does NOT provide**:
-- Legal data enrichment (scraping, LAT parsing, graph inference — that's sertantai-legal)
-- User authentication (comes from sertantai-auth)
-- Organization management (comes from hub)
+## Architecture essentials
 
-## Local-First Architecture: Electric + PGLite (No TanStack DB)
+### Shared database: legal owns it, compliance reads it
 
-### CRITICAL: Do NOT re-introduce TanStack DB
+- **Dev:** compliance uses `sertantai_legal_dev` on port 5436 (legal's Postgres container). Tests use `sertantai_compliance_test` on the same server.
+- **Prod:** compliance uses **`sertantai_legal_prod`** in the `shared_postgres` container, shared with legal. Anything done to that database (restores included) affects legal.
+- **`SertantaiCompliance.Api`** holds the read-only `Legal.*` resources (`legal_register`, `legal_articles`, `legislative_definitions`, …). They are `migrate? false` with `defaults [:read]`. **Never generate migrations for them.**
+- **`SertantaiCompliance.Sync`** holds compliance-owned resources (org applicabilities, screening profiles, applicability events, law change snapshots, sync config). Compliance migrates these.
+- **Migrations must be idempotent** (`create_if_not_exists`, `add_if_not_exists`): the tables may already exist in the shared dev database. Hand-edit generated migrations accordingly. `mix ash.codegen --check` is expected to be clean.
+- **Never run `mix ash.setup`, `ash.reset` or `ash_postgres.create/drop`** against the shared database. `mix ash_postgres.migrate` is fine.
 
-The frontend uses a local-first architecture for the browse and glossary pages:
+### Screener pipeline (`backend/lib/sertantai_compliance/fitness/`)
 
-```
-Electric (server) → PGLite (IndexedDB, WASM Postgres) → gridlite-adapter-pglite → GridLite UI
-```
+`Vocabulary` (codes and dimensions from the expression trees) → `ApplicabilityEvaluator.profile_from_screening/2` (routes profile values to tree dimensions; strips actor prefixes like `"Org: Employer"` → `employer`) → `ApplicabilityEvaluator` (walks `compiled_applicability`) → `Screener` (the one screening run; applies jurisdiction exclusion) → `Benchmark`.
+`POST /api/screening/evaluate`, `mix screener.benchmark` and change detection all go through `Fitness.Screener`, so they agree.
 
-**Do NOT add `@tanstack/db` or `gridlite-adapter-tanstack-db` to this project.** TanStack DB was evaluated twice (sertantai-legal #38, then #66) and removed both times:
+**Screener principles (decided with the user):**
+- **Prefer inclusion.** A human sense-checks the register, and a wrongly excluded law is never seen. Only categorical facts exclude: revoked in full (the corpus filter), devolved legislation for a nation the org doesn't operate in (`Fitness.Jurisdiction`, by law type code), or an org *wholly* within a `Not` disapplication. Anything weaker is included with a **caveat** and confidence ×0.6 (probable tier).
+- **A legacy register is a reference, not ground truth.** Disagreements are triaged as register error vs screener gap. `mix screener.benchmark` does this; run it before and after any screener change and compare.
+- Remaining accuracy problems are mostly **legal data** (trees, Making classification, extents). Report them on sertantai-legal#161 rather than working around them here, unless the fix is categorical and authoritative.
 
-1. **Mar 2026**: Removed because TanStack DB's in-memory collections caused browser crashes with 19K+ records (~48MB JS heap). Replaced with PGLite.
-2. **Aug 2026**: Removed again after being re-introduced via GridLite 0.5 adapter migration. The `collection-bridge.ts` pattern duplicated all data (once in PGLite/IndexedDB, again in TanStack DB's in-memory Map), adding ~50-100MB heap for 49K definitions.
+### Change feed (`backend/lib/sertantai_compliance/sync/change_detector.ex`)
 
-### Why PGLite adapter is sufficient
+- A change is "law X affected by law Y": `law_amended` with `change_type` amended, part_revoked or revoked. A revocation is the outcome of an amending or revoking law.
+- New laws the screener says apply are raised as `new_law_available`.
+- Detection diffs legal_register against `LawChangeSnapshot`. The first run is a silent baseline, and runs are idempotent.
+- It runs daily at 05:00 UTC via Oban (`ChangeDetectionWorker`), or by hand with `mix changes.detect [--baseline]`.
 
-- PGLite IS a real SQL database (PostgreSQL 18 via WASM) — it handles filtering, sorting, pagination, and grouping at the SQL level with indexes
-- `gridlite-adapter-pglite` provides live queries via PGLite's `live.query()` extension — reactive updates when Electric syncs new data
-- No in-memory duplication — data lives in IndexedDB, queries are paginated
-- `relaxedDurability: true` gives fast query responses while flushing to IDB async
+### Frontend: local-first, PGLite. Do NOT re-introduce TanStack DB
 
-### Key files
+Electric → PGLite (IndexedDB, WASM Postgres) → `gridlite-adapter-pglite` → GridLite, for the browse and glossary pages. TanStack DB was removed twice: its in-memory collections duplicated PGLite's data and crashed or bloated the browser (tens of MB of heap for 19K–49K rows). Screener, profile and change pages use the REST API (`$lib/api/*`).
 
-| File | Purpose |
-|------|---------|
-| `frontend/src/lib/pglite/client.ts` | PGLite singleton (IDB-backed, versioned name) |
-| `frontend/src/lib/pglite/sync.ts` | Electric shape subscriptions (laws, definitions, applicabilities) |
-| `frontend/src/lib/pglite/schema.sql.ts` | CREATE TABLE statements, schema versioning |
+- `frontend/src/lib/pglite/client.ts`: the PGLite singleton. Bump `DB_VERSION` on breaking PGLite upgrades, because the IndexedDB format changes.
+- `frontend/src/lib/pglite/sync.ts`: Electric shape subscriptions, through the Phoenix proxy (`/api/electric/v1/shape`).
 
-### PGLite IDB versioning
+## Conventions
 
-PGLite breaking upgrades (e.g. 0.3→0.5) change the IndexedDB format. The IDB name includes `DB_VERSION` (in `client.ts`) — bump it when upgrading PGLite across breaking versions. Old databases are orphaned; fresh data syncs from Electric on first load.
+- **Ash for compliance-owned resources and for actions the API exposes.** Give those actions `description`s written for AI clients: they are the planned MCP surface (ash_ai, v0.2). **Raw SQL (`Repo.query`) is normal for reads and aggregates over legal's tables**; follow the existing modules (`Screener`, `Vocabulary`, `ChangeDetector`). Don't wrap them in Ash for its own sake.
+- **Profile API:**
+  - `PUT /profile` replaces the whole profile; `PATCH /profile` changes only the fields given. The wizard uses PATCH.
+  - Values no tree uses are stored with `warnings`; `?strict=true` rejects them instead.
+  - `POST /profile/check` checks a profile without saving; `GET /vocabulary` is self-describing.
+- **Tests that need legal tables** create a minimal `legal_register` in the sandbox. Insert jsonb as a map, not `Jason.encode!` + `::jsonb` (that stores a JSON string scalar). The vocabulary cache TTL is 0 in test config.
+- Keep code idiomatic. Suppress known tool false positives narrowly and with a comment (e.g. `.dialyzer_ignore.exs` for OTP 28+ MapSet opaque warnings), rather than rewriting the code around them.
 
-## Database & Migration Strategy
+## Development
 
-### CRITICAL: Shared Database Pattern
+Toolchain (`.tool-versions`): Erlang 29.1.1, Elixir 1.20.4, Node 26. CI and the Docker images use the same versions.
 
-**In development, compliance shares `sertantai_legal_dev` on port 5436.** It does NOT use its own database or its own PostgreSQL container. This is intentional — sertantai-legal (admin) and sertantai-compliance (production) operate on the same database locally.
+Services that must be running (Docker): legal's Postgres (5436), the shared Electric (3002), sertantai-auth (4000), and the hub (frontend 5173, backend 4006).
 
-```
-Dev:  compliance → sertantai_legal_dev (port 5436) ← legal
-Prod: compliance → sertantai_compliance_prod       ← legal pushes via delta sync
-```
-
-### Read-Only Reference Resources
-
-Compliance has 10 Ash resources that mirror tables owned by sertantai-legal:
-
-| Resource | Table | Owner |
-|----------|-------|-------|
-| `Legal.LegalRegister` | `legal_register` | legal writes, compliance reads |
-| `Legal.LegalArticle` | `legal_articles` | legal writes, compliance reads |
-| `Legal.AmendmentAnnotation` | `amendment_annotations` | legal writes, compliance reads |
-| `Legal.Control` | `controls` | legal writes, compliance reads |
-| `Legal.ControlMapping` | `control_mappings` | legal writes, compliance reads |
-| `Legal.EvidencePattern` | `evidence_patterns` | legal writes, compliance reads |
-| `Legal.ArtefactTemplate` | `artefact_templates` | legal writes, compliance reads |
-| `Legal.SecondarySource` | `secondary_sources` | legal writes, compliance reads |
-| `Legal.SecondarySourceProvision` | `secondary_source_provisions` | legal writes, compliance reads |
-| `Legal.SourceLink` | `source_links` | legal writes, compliance reads |
-
-**These resources have `defaults [:read]` only — no create/update/destroy actions.**
-
-**DO NOT generate migrations for these resources.** The tables are created and managed by sertantai-legal. Compliance reads them via the shared database connection. Running `mix ash.codegen --check` will report "Pending Code Generation Detected for 23 files" — this is expected and correct. These resources intentionally have no migrations.
-
-### Org-Scoped Resources (Compliance Owns)
-
-These tables are owned by compliance and WILL have migrations (in production):
-
-| Resource | Table | Owner |
-|----------|-------|-------|
-| `Sync.OrgApplicability` | `org_applicabilities` | compliance |
-| `Sync.OrgScreeningProfile` | `org_screening_profiles` | compliance |
-| `Sync.OrgEntitlement` | `org_entitlements` | compliance |
-| `Sync.SyncProfile` | `sync_profiles` | compliance |
-| `Sync.SyncConfiguration` | `sync_configurations` | compliance |
-| `Sync.SyncJob` | `sync_jobs` | compliance |
-| `Sync.SyncRowMapping` | `sync_row_mappings` | compliance |
-| `Sync.OrgSecondaryApplicability` | `org_secondary_applicabilities` | compliance |
-| `Sync.Organization` | `organizations` | compliance |
-| `Sync.ApplicabilityEvent` | `applicability_events` | compliance |
-
-**In dev, these tables already exist** in `sertantai_legal_dev` (created by legal's migrations). In production, compliance will run its own migrations to create them.
-
-### Migration Rules
-
-1. **NEVER generate migrations for read-only reference resources** (the 10 `Legal.*` resources)
-2. **NEVER run `mix ash.setup` or `mix ash_postgres.create`** — the database already exists and is managed by sertantai-legal's docker-compose
-3. **DO run `mix ash_postgres.migrate`** for compliance-owned tables when adding new org-scoped resources
-4. **The `ash.codegen --check` warning about 23 pending files is expected** — suppress or ignore it in pre-commit hooks
-
-## Git Commit Rules
-
-**Do NOT use `--no-verify` on commits for feature implementations, bug fixes, or any code changes.** Git hooks (pre-commit, pre-push) exist to maintain code quality — formatting, linting, tests — and must run on substantive changes.
-
-Only use `--no-verify` when **explicitly instructed by the user**, typically for:
-- Session/documentation-only changes
-- Minor non-code changes where hooks are irrelevant
-
-## Quick Reference
-
-### Development Commands
-
-**Backend** (from `backend/`):
 ```bash
-mix deps.get                      # Install dependencies
-mix ash_postgres.create           # Create database
-mix ash_postgres.migrate          # Run migrations
-mix ash_postgres.generate_migrations --name <name>  # Generate migration
-mix run priv/repo/seeds.exs       # Seed database
-mix phx.server                    # Start Phoenix server (http://localhost:4004)
-                                  # Tidewave MCP: http://localhost:4004/tidewave/mcp
-mix test                          # Run tests
-mix credo                         # Static analysis
-mix dialyzer                      # Type checking
-mix sobelow                       # Security analysis
-mix usage_rules.check             # Check project usage rules
-mix format                        # Format code
-mix ash.setup                     # Setup: create DB, migrate, seed
-mix ash.reset                     # Reset: drop DB and re-setup
+cd ~/Desktop/sertantai-legal && docker compose -f docker-compose.dev.yml up -d postgres   # if not running
+./scripts/development/dev-start   # compliance backend :4004 + frontend :5176 in terminal tabs
+./scripts/development/dev-stop
 ```
 
-**Frontend** (from `frontend/`):
-```bash
-npm install                       # Install dependencies
-npm run dev                       # Start dev server (http://localhost:5176)
-npm run build                     # Production build
-npm run preview                   # Preview production build
-npm test                          # Run tests (Vitest)
-npm run test:coverage             # Run tests with coverage
-npm run lint                      # ESLint
-npm run lint:fix                  # ESLint with auto-fix
-npm run check                     # TypeScript type checking
-npm run format                    # Format with Prettier
-npm run format:check              # Check formatting
-```
-
-**Docker** — compliance does NOT have its own PostgreSQL. Use legal's:
-```bash
-cd ~/Desktop/sertantai-legal
-docker-compose -f docker-compose.dev.yml up -d postgres  # Start shared DB (port 5436)
-```
-
-### Port Allocation
-
-| Service | Port | Database |
-|---------|------|----------|
-| sertantai-enforcement | 5434 | sertantai_enforcement_dev |
-| sertantai-hub | 5435 | starter_app_dev |
-| sertantai-legal | 5436 | sertantai_legal_dev |
-| sertantai-controls | 5437 | sertantai_controls_dev |
-| sertantai-auth | 5438 | sertantai_auth_prod |
-| **sertantai-compliance** | **5436** | **sertantai_legal_dev (shared)** |
+**Signing in locally:** sign in at the hub (http://localhost:5173), then click its **Controls** tile. In dev it points at :5176 and hands the token to compliance's `/auth/callback`. (There is no Compliance tile yet; that's a session 08 item.) The QQ dev user is `jason.woodruff@qinetiq.com`, org `c075d56b-8420-4408-b695-ccfbc1ba15ec`.
 
 | Service | Port |
-|---------|------|
-| Phoenix Backend | 4004 |
-| ElectricSQL | 3003 |
-| Frontend (dev) | 5176 |
-
-### Health Check Endpoints
-- Backend: http://localhost:4004/health
-- Backend detailed: http://localhost:4004/health/detailed
-- ElectricSQL: http://localhost:3003
-
-## Local Development Setup
-
-### Database Configuration
-
-**Port**: `5436` — compliance shares `sertantai_legal_dev` with sertantai-legal.
-
-**DO NOT start compliance's own PostgreSQL container.** Use legal's:
+|---|---|
+| Compliance backend (Phoenix) | 4004 (health `/health`, `/health/detailed`; Tidewave `/tidewave/mcp`) |
+| Compliance frontend (Vite) | 5176 |
+| Shared Postgres (legal) | 5436 |
+| Shared Electric | 3002 |
+| Auth / Hub | 4000 / 5173, 4006 |
 
 ```bash
-# Start legal's PostgreSQL (if not already running)
-cd ~/Desktop/sertantai-legal
-docker-compose -f docker-compose.dev.yml up -d postgres
+# backend/
+mix test | mix format | mix credo --only design,consistency --strict | mix dialyzer | mix sobelow --config
+mix ash.codegen <name>      # then make the migration idempotent; never for Legal.* resources
+mix ash_postgres.migrate
+mix screener.benchmark --org <uuid> --name qq --label <label> --profile-file priv/benchmarks/qq/profile_reviewed.json
+mix changes.detect [--baseline]
 
-# Start compliance backend (no docker needed)
-cd ~/Desktop/sertantai-compliance/backend
-mix phx.server  # http://localhost:4004
+# frontend/
+npm run dev | npm run check | npm run lint | npm run format | npm run test:run | npm run build
 ```
 
-## Project Structure
+## Workflow
 
-```
-sertantai-compliance/
-├── backend/                          # Elixir/Phoenix/Ash backend
-│   ├── lib/
-│   │   ├── sertantai_compliance/     # Domain layer
-│   │   │   ├── api.ex                # Ash Domain
-│   │   │   ├── repo.ex               # Ecto Repo
-│   │   │   └── application.ex        # OTP Application
-│   │   ├── sertantai_compliance_web/ # Web layer (Phoenix)
-│   │   │   ├── controllers/
-│   │   │   ├── endpoint.ex
-│   │   │   └── router.ex
-│   │   └── sertantai_compliance.ex
-│   ├── priv/
-│   │   └── repo/
-│   │       └── migrations/
-│   ├── config/
-│   └── mix.exs
-│
-├── frontend/                         # SvelteKit frontend
-│   ├── src/
-│   │   ├── routes/
-│   │   └── lib/
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── docker-compose.dev.yml            # Local development only
-└── README.md
-```
+- **Git hooks** (`.githooks/`): pre-commit runs format, compile, Credo, the Ash codegen check and svelte-check. Pre-push runs Dialyzer (blocking), Sobelow, `deps.audit`, the unused-deps check, and backend and frontend tests. CI (`.github/workflows/ci.yml`) runs the same checks plus ESLint and a build.
+- **Never use `--no-verify`** for code changes. Use it only when the user explicitly says so, e.g. for docs-only commits.
+- **Commit locally as you go; push at the end of a session** (or when asked). Every push runs the slow hooks and then CI.
+- **Don't edit the working tree while a pre-push hook is running**: it tests the files on disk. Push in the foreground.
+- **Stage explicit paths.** Another session (e.g. sertantai-legal running the benchmark) may write files here, and `git add <dir>` sweeps them in.
+- **Sessions:** `.claude/sessions/` holds one markdown file per piece of work, indexed in SQLite. Use `/session-start`, `/session-suspend` and `/session-close`; they add YAML learning blocks. Quote YAML values that start with a special character, and check the index rebuild for `WARN`.
 
-## Related Projects
+## Releases and production
 
-| Project | Location | Purpose |
-|---------|----------|---------|
-| sertantai-legal | `~/Desktop/sertantai-legal` | UK Legal data source (read-only API) |
-| sertantai-hub | `~/Desktop/sertantai-hub` | Orchestration, user subscriptions |
-| sertantai-auth | TBD | Centralized authentication |
-| infrastructure | `~/Desktop/infrastructure` | Shared PostgreSQL, Redis, Nginx |
+- Every prod deploy is a tagged, version-pinned release: `docs/RELEASING.md`.
+- `scripts/release.sh X.Y.Z[-rc.N]` bumps `backend/mix.exs` and `frontend/package.json` together (CI checks they match), updates `CHANGELOG.md` and tags.
+- `scripts/deployment/deploy-prod.sh --version X.Y.Z`: backs up `sertantai_legal_prod` before backend deploys (the backend migrates on start), pins `SERTANTAI_COMPLIANCE_VERSION` in the server `.env`, logs the deploy and checks `/health`. It never deploys `latest`.
+- Add user-facing changes to `CHANGELOG.md` under **Unreleased**, written for customers.
+- The stack's `scripts/backup.sh` / `restore.sh` are Baserow-only; they don't cover compliance's database.

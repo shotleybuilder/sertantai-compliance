@@ -1,18 +1,120 @@
 ---
 session: "v0.1-08: Production Hardening"
-status: active
+status: closed
 opened: 2026-09-25
+closed: 2026-09-25
+outcome: success
 parent: v0.1/meta.md
-depends_on: ["v0.1/03-prod-data-unblock"]
 
 summary: >
-  Make prod safe for several real QQ users: per-user local storage, an
-  end-to-end real-user login, backups, monitoring and error tracking.
+  Found and fixed a critical cross-tenant leak in the Electric proxy (a fake
+  handle bypassed auth for org tables); prod compliance and the crash-looping
+  legal backend were stopped. Prod turned out to hold no org data. Security
+  review, hub Compliance tile, npm audit, and sertantai-stack hardening
+  followed, plus encrypted off-server backups (Hetzner Storage Box, two restic
+  repos) with a verified restore drill and a NAS mirror. Monitoring moved to
+  08a; the prod restart is gated on #25.
+
+decisions:
+  - what: Stop prod compliance (and the broken legal backend) until the fix ships
+    why: User. The leak had been live since August; stopping was faster and safer than a hot-fix deploy
+    result: "All leak paths return 502; unless-stopped keeps them down; restart checklist in issue #25"
+  - what: Only public reference tables bypass auth in the Electric proxy
+    why: A handle isn't proof of access; Electric answers a mismatched handle with the shape for the caller's params
+    result: Every org-shape request (including live polls) is Gatekeeper-validated; regression tests; dev browse still syncs
+  - what: Reject tokens without a valid org_id; remove debug-dump and /api/hello; bound paging
+    why: Security review findings (debug-dump's Mix.env guard doesn't work in a release)
+    result: 4 AuthPlug tests with real Ed25519 tokens; Sobelow triaged
+  - what: "nginx: remove the direct /electric/ route, add HSTS and a report-only CSP, hide /health/detailed, pin Electric"
+    why: The direct route bypassed the API proxy; the CSP is report-only because it can't be tested in prod first
+    result: sertantai-stack 7975ecb, validated with nginx -t and a local functional run
+  - what: Svelte 5 / GridLite 0.10 / Vite 8 upgrade after v0.1
+    why: Nothing forces it (Kit 2.70 accepts Svelte 4; GridLite 0.10 needs Svelte 5 but the PGLite adapter isn't released for it); remaining npm findings are dev-server only
+    result: npm audit 10 → 5 without breaking changes; dev server binds localhost; pending session for the upgrade
+  - what: Hub Compliance tile, fixed in hub itself
+    why: Hub gave compliance Controls' ports in the README only; the code still sent Controls to compliance
+    result: hub 63e3ba8, images published, legal's local services compose updated, stack env for prod
+  - what: Two restic repositories split by credentials, not by database owner
+    why: User wants org data on the NAS but not personal credentials; a column audit showed the auth DB holds all credentials and legal_prod holds none
+    result: org repo (legal, hub, compliance-tables) mirrored to the NAS; private repo (auth) Hetzner only; different passwords
+  - what: Backups run as a stack container, not in the app or on the host by hand
+    why: They must work while apps are down (as now), and be version-controlled
+    result: backup service with daily 02:00 dumps, monthly restore drill, retention, status files; first backup 23 s, drill 39 s
+  - what: The NAS pull runs on the office PC, not the NAS
+    why: No direct NAS access; the PC already mounts it over SMB
+    result: systemd user timer 04:00 UTC; read-only sub-account; ciphertext only; guarded deletions; verified decryptable
+  - what: Close 08; monitoring and error tracking to a new session
+    why: User. The hardening work is done; monitoring is a coherent piece of its own
+    result: v0.1-08a pending (Uptime Kuma and Beszel already in the stack; error tracking is the gap)
+
+metrics:
+  electric_leak: { reproduced_dev: true, prod_org_rows_exposed: 0, regression_tests: 5 }
+  security_review: { sobelow_low_hits_triaged: 35, fixes: 4, authplug_tests: 4 }
+  npm_audit: { before: 10, after: 5, high_remaining: 1 }
+  tests: { backend: 98, frontend: 138 }
+  backups: { first_backup_s: 23, restore_drill_s: 39, legal_prod_mib: 93.9, org_repo_objects: 19, box_snapshots_kept: 10 }
+  nas_pull: { first_pull_s: 18, files_matched: 19, restic_check: clean }
+  disk_freed_local_gb: 6.7
+
+lessons:
+  - title: "A shape handle is not proof of access"
+    detail: "The proxy skipped auth for requests carrying a handle, assuming the first request had validated access. Electric answers a mismatched handle by pointing at the shape for the caller's own params, so a fake handle read any org's rows. Validate every request for non-public tables."
+    tag: electric
+  - title: "Mix.env() guards don't work in releases"
+    detail: "Mix isn't included in a release, so 'if Mix.env() == :prod' raises at runtime instead of returning false. Use compile-time config (Application.compile_env) or remove dev-only endpoints from the prod router."
+    tag: deployment
+  - title: "nginx depends_on can silently restart stopped services"
+    detail: "The stack's nginx depends_on lists every app, so 'docker compose up -d nginx' without --no-deps restarts deliberately stopped containers. Use 'restart nginx' or --no-deps."
+    tag: deployment
+  - title: "Check what an infra script really covers"
+    detail: "The stack's backup.sh/restore.sh are Baserow-only, and ~/backups held two 11-month-old manual dumps: no scheduled backups existed for any database. Several earlier plans had assumed otherwise."
+    tag: infrastructure
+  - title: "pg_dump major version must match the server, both ways"
+    detail: "An older pg_dump refuses a newer server (seen: pg_dump 16 vs dev PG 17); a newer one emits settings an older server rejects on restore. Pin postgresqlNN-client to the server major (PG_MAJOR build arg)."
+    tag: infrastructure
+  - title: "restic --stdin-from-command makes failed dumps fail loudly"
+    detail: "Piping pg_dump into restic --stdin would store a truncated dump if pg_dump fails midway. With --stdin-from-command the snapshot fails and no success marker is written; confirmed with a real version-mismatch failure."
+    tag: infrastructure
+  - title: "Storage Box sub-accounts share keys if they share a base dir"
+    detail: "Keys live in <base>/.ssh/authorized_keys, so a read-only NAS account in the same base dir as the read-write account would accept the same keys. Nest the NAS base dir (/sertantai/repo) inside the backup one, and write its key via the read-write account."
+    tag: infrastructure
+  - title: "rclone sftp: pin the host key algorithm and copy empty dirs"
+    detail: "With only the ed25519 host key pinned, rclone reported 'knownhosts: key mismatch' until host_key_algorithms=ssh-ed25519. rclone also skips empty dirs by default, leaving restic's locks/ missing; use --create-empty-src-dirs."
+    tag: tooling
+  - title: "Verify a mirror by decrypting it, not just by file counts"
+    detail: "rclone check matched 19/19 files, but the real proof was restic snapshots and check on the NAS copy with the org password (fetched without printing)."
+    tag: infrastructure
+  - title: "Prove pre-existing test failures before shipping around them"
+    detail: "Hub's 26 failing tests were confirmed pre-existing by running the suite with the change stashed (77/103 both ways), then raised as hub#23 rather than blamed on the change or ignored."
+    tag: tooling
+
+artifacts:
+  - backend/lib/sertantai_compliance_web/controllers/electric_proxy_controller.ex
+  - backend/lib/sertantai_compliance_web/plugs/auth_plug.ex
+  - backend/lib/sertantai_compliance_web/controllers/screening_controller.ex
+  - backend/lib/sertantai_compliance_web/router.ex
+  - backend/test/sertantai_compliance_web/controllers/electric_proxy_controller_test.exs
+  - backend/test/sertantai_compliance_web/plugs/auth_plug_test.exs
+  - frontend/package-lock.json
+  - frontend/vite.config.ts
+  - docker-compose.dev.yml
+  - "sertantai-hub 63e3ba8 (Compliance tile)"
+  - "sertantai-stack 93d6a50, 7975ecb, afa225d, 3ba7117 (hub env, nginx security, backup service, NAS pull)"
+  - .claude/sessions/2026-09-25-svelte5-gridlite-upgrade.md
+  - .claude/sessions/v0.1/08a-monitoring.md
+
+depends_on:
+  - v0.1/02-release-engineering.md
+
+enables:
+  - "#25: prod restart once the pinned release deploys"
+  - "v0.1-08a: monitoring, error tracking, backup freshness alerts"
+  - "v0.1-09: RC pilot on a hardened, backed-up prod"
 ---
 
-# Session: Production Hardening (ACTIVE)
+# Session: Production Hardening (CLOSED)
 
-> **Resumed 2026-09-25.**
+> Closed 2026-09-25. Monitoring and error tracking moved to [08a](./08a-monitoring.md); prod restart gated on #25.
 
 ## Problem
 
@@ -27,16 +129,16 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 - ✅ **IDB isolation**: already scoped per org in `pglite/client.ts` (IDB name from the JWT `org_id`; the #106 fix was ported earlier)
 - ✅ **Electric proxy cross-tenant leak (critical, fixed 2026-09-25)**: see below
 - ✅ Prod compliance **stopped** 2026-09-25 13:26 UTC (user's decision) until the fix is deployed: backend, frontend and Electric (`docker compose stop`; containers kept). Both leak paths now return 502. Prod exposure was not probed.
-- ⬜ Deploy the fix via a pinned release (`deploy-prod.sh --version …`, which starts the containers again); then re-baseline change detection after legal#27's data sync
+- ⏸️ Deploy the fix via a pinned release (`deploy-prod.sh --version …`, which starts the containers again); then re-baseline change detection after legal#27's data sync (blocked: release, tracked in #25 and session 09)
 - ✅ Browser check (user): `/browse` still syncs in dev with Gatekeeper-validated live polls
 - ✅ **Hub Compliance tile** (sertantai-hub `63e3ba8`, pushed; images `:latest` + `:sha-63e3ba8` published): `COMPLIANCE_URL` → `/app/screening` via `/auth/callback`; health proxy `compliance` entry; Controls defaults moved to 5177/4007
 - ✅ Local: the legal session updated `docker-compose.services.yml` (`VITE_COMPLIANCE_URL`, `VITE_CONTROLS_URL=:5177`, `COMPLIANCE_SERVICE_URL`) and recreated only the hub services. Verified: hub health proxy `compliance` returns ok 0.1.0; `controls` offline (nothing on 4007); frontend runs `sha-63e3ba8` and serves `VITE_COMPLIANCE_URL` in `env-config.js`
-- ⬜ Prod: sertantai-stack `93d6a50` (hub-backend `COMPLIANCE_SERVICE_URL`) is pushed but **not pulled on the server**; pull and recreate hub-backend when compliance is restarted (#25)
-- ⬜ **Real-user auth**: an actual QQ user account goes hub → auth → compliance end to end. Check token refresh, logout, and org scoping on every API route and Electric shape (legal#29, #36, #47).
-- ⬜ **Monitoring**: uptime check on `/health`, error tracking (backend and frontend), and log retention.
-- ⬜ **Performance**: first-load sync time for browse and glossary on a typical corporate laptop and network.
+- ⏸️ Prod hub: stack `93d6a50` is now **pulled on the server** (with `afa225d`); recreate hub-backend when compliance is restarted (blocked: #25)
+- ⏸️ **Real-user auth** (verified in dev: hub tile → `/auth/callback` → org-scoped API and Electric; tokens without org_id rejected. Prod check is on #25): an actual QQ user account goes hub → auth → compliance end to end. Check token refresh, logout, and org scoping on every API route and Electric shape (legal#29, #36, #47).
+- ⏸️ **Monitoring**: moved to [v0.1-08a](./08a-monitoring.md)
+- ⏸️ **Performance**: moved to [v0.1-08a](./08a-monitoring.md) (performance baseline)
 - ✅ **Security review (code side)** 2026-09-25: see below. Stack-side follow-ups are on #25
-- ⬜ **Support basics**: version shown in the UI, a contact route for QQ users, known-issues list.
+- ⏸️ **Support basics**: version in the UI ✅ (session 02); contact route and known-issues list moved to v0.1-09
 
 ## Electric proxy: cross-tenant data leak (found and fixed 2026-09-25)
 

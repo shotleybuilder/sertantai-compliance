@@ -18,4 +18,6 @@ summary: >
 - ⬜ First run of the `docs/RELEASING.md` runbook, for rc.1. Fix the runbook wherever it's wrong.
 - ⬜ Pilot onboarding: short walkthrough for QQ users covering profile, screener, register and change feed.
 - ⬜ Collect feedback in a structured way (GH issues labelled `pilot`), and triage daily.
+- ⬜ Support basics for QQ (from 08): a contact route for pilot users and a known-issues list (the version is already shown in the app header)
+- ⬜ Switch the nginx CSP from Report-Only to enforcing once the rc shows no console violations (stack `7975ecb`)
 - ⬜ Feature freeze 20 Oct. After that, only fixes, each one listed in the changelog.

@@ -7,6 +7,10 @@
 # General application configuration
 import Config
 
+# Required since Ash 3.33. Codepoints match how Postgres counts length, so
+# max_length validation agrees with the database.
+config :ash, default_string_length_count: :codepoints
+
 config :sertantai_compliance,
   ecto_repos: [SertantaiCompliance.Repo],
   ash_domains: [SertantaiCompliance.Api, SertantaiCompliance.Sync],

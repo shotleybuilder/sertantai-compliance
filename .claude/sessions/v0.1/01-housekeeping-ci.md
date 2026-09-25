@@ -1,16 +1,109 @@
 ---
 session: "v0.1-01: Housekeeping & CI Green"
-status: active
+status: closed
 opened: 2026-09-25
+closed: 2026-09-25
+outcome: success
 parent: v0.1/meta.md
-depends_on: []
 
 summary: >
-  Land uncommitted work, close stale issues and sessions, and get every CI
-  workflow green on main. CI has failed on every run since 2026-08-15.
+  Got CI green on main for the first time since 2026-08-15 by peeling back
+  several failures, each hidden behind the one before. Upgraded Ash for a
+  security advisory and migrated the whole toolchain to Elixir 1.20.4 / OTP
+  29.1.1 / Node 26, verified in built Docker images. Landed the leftover
+  uncommitted work and closed stale issues and sessions.
+
+decisions:
+  - what: Keep ci.yml as the only workflow; delete backend-ci.yml, frontend-ci.yml and frontend-deploy.yml
+    why: The two CI workflows were starter-template leftovers (Elixir 1.16, a missing ecto.setup alias). The Cloudflare deploy never succeeded, had no secrets, and prod serves the Docker frontend through nginx in sertantai-stack.
+    result: One workflow, versions pinned to match the Dockerfiles
+  - what: Make CI security steps blocking and aligned with the pre-push config
+    why: continue-on-error hid real failures (Sobelow without --config, deps.audit ignoring .deps-audit-ignore, stale libgraph, a nonexistent usage_rules.check task)
+    result: CI and hooks run the same checks with the same config
+  - what: Upgrade the Ash family (ash 3.27.7 → 3.33.11, ash_postgres 2.13.1, ash_sql 0.7.6)
+    why: mix deps.audit flagged a real advisory (private action arguments settable via string-keyed params, fixed in 3.29.3)
+    result: No vulnerabilities; 44/44 tests pass; required default_string_length_count :codepoints and an ash-functions v6 migration (a no-op on the shared DB, since legal is already on v6)
+  - what: Migrate to Elixir 1.20.4 / OTP 29.1.1 instead of pinning local back to 1.18/27
+    why: The OS upgrade moved local to 1.20/29. All deps compile (61 warnings, all third-party and non-breaking). Docker and setup-beam builds exist.
+    result: Local, CI and Docker matched; .tool-versions added; image built and served /health with DB healthy
+  - what: Ignore OTP 28+ MapSet call_without_opaque warnings per file in .dialyzer_ignore.exs
+    why: Known upstream false positive (elixir-lang/elixir#14750); a @spec doesn't fix it, and the community recommends narrow ignores over rewriting idiomatic code
+    result: Dialyzer 14 found / 14 skipped / 0 unnecessary; exit 0
+  - what: Make Dialyzer blocking in pre-push (including a stale PLT)
+    why: The hook treated exit 2 and ":dialyzer.run error" as non-blocking, so pushes passed while CI failed
+    result: The hook matches CI
+  - what: Frontend to node:26-alpine with npm ci from the committed lockfile
+    why: Match local Node 26 and make builds reproducible for tagged releases
+    result: Image builds; / and SPA deep links serve 200; healthcheck healthy
+  - what: Commit locally during a session, push at session end
+    why: Every push runs slow pre-push hooks and then full CI again
+    result: Saved as a feedback memory (push-at-session-end)
+
+metrics:
+  ci: { red_since: "2026-08-15", first_green_runs: ["a705b5a", "4566fe2"] }
+  eslint: { errors_before: 68, errors_after: 0, warnings: 11 }
+  backend_tests: { passed: 44, failed: 0 }
+  frontend_tests: { passed: 132, failed: 0 }
+  dialyzer: { ci_errors_before: 1, local_otp29_false_positives: 13, after: 0 }
+  deps_audit: { before: "ash 3.27.7 moderate", after: "none (decimal advisory accepted in ignore file)" }
+  npm_audit: { total: 10, high: 3, moderate: 5, low: 2, deferred_to: "v0.1-08" }
+  toolchain: { elixir: "1.18.4 → 1.20.4", otp: "27.2 → 29.1.1", node: "22 → 26", alpine_runtime: "3.23 → 3.24" }
+
+lessons:
+  - title: "continue-on-error and early failures hide a stack of later ones"
+    detail: "CI looked like 'Dialyzer, 1 error' plus 'lockfile missing'. Behind those were a test DB port mismatch, 68 ESLint errors, a nonexistent mix task, audit/sobelow config drift and an unused Logger. Run every CI step locally before declaring the cause."
+    tag: tooling
+  - title: "config/test.exs hard-codes port 5436, so the CI Postgres service must map 5436:5432"
+    detail: "The shared legal DB pattern puts dev and test on 5436. A CI service on 5432 means the backend tests can never connect. The 'role root does not exist' error was only pg_isready running without -U."
+    tag: infrastructure
+  - title: "Hooks that tolerate failures drift from CI"
+    detail: "pre-push treated Dialyzer exit 2 and ':dialyzer.run error' as non-blocking. That hid a real CI failure for 6 weeks, and after the OS upgrade a stale PLT was silently skipped. Hooks should block on exactly what CI blocks on."
+    tag: tooling
+  - title: "OTP 28+ Dialyzer flags idiomatic MapSet use as call_without_opaque"
+    detail: "MapSet wraps the opaque :sets.set. Adding @spec MapSet.t() does not help. Use narrow per-file :call_without_opaque ignores with a comment linking elixir-lang/elixir#14750."
+    tag: tooling
+  - title: "Ash 3.33 refuses to compile without default_string_length_count"
+    detail: "The upgrade raises a Spark DslError on the first resource using string length constraints. Set config :ash, default_string_length_count: :codepoints. It also generates an ash-functions v6 extension migration; check legal's snapshot first, since the DB is shared."
+    tag: schema
+  - title: "Runtime Alpine must match the elixir builder image's Alpine"
+    detail: "elixir:1.20.4-otp-29-alpine is Alpine 3.24.2, so runtime alpine:3.23 would mismatch OpenSSL/ncurses. OTP 29 also tries to load libsctp at boot, so add lksctp-tools."
+    tag: deployment
+  - title: "The release only starts the HTTP server with PHX_SERVER=true"
+    detail: "When smoke-testing the image, set PHX_SERVER=true (the sertantai-stack compose file sets it), or /health never answers even though migrations run."
+    tag: deployment
+  - title: "gh needs the workflow scope to push .github/workflows changes"
+    detail: "The push was rejected: 'refusing to allow an OAuth App to create or update workflow without workflow scope'. Fix with gh auth refresh -h github.com -s workflow."
+    tag: tooling
+  - title: "Prod deploy config lives in ~/Desktop/sertantai-stack, not in this repo"
+    detail: "docker/docker-compose.yml already parameterises images with SERTANTAI_COMPLIANCE_VERSION and scripts/backup.sh and restore.sh exist. Release pinning and backups should build on these."
+    tag: deployment
+
+artifacts:
+  - .github/workflows/ci.yml
+  - .tool-versions
+  - .githooks/pre-push
+  - backend/.dialyzer_ignore.exs
+  - backend/Dockerfile
+  - backend/mix.exs
+  - backend/mix.lock
+  - backend/config/config.exs
+  - backend/priv/repo/migrations/20260925084439_upgrade_ash_functions_v6_extensions_1.exs
+  - frontend/Dockerfile
+  - frontend/eslint.config.js
+  - frontend/package-lock.json
+  - frontend/.gitignore
+  - README.md
+
+depends_on:
+  - 2026-08-15-actor-wizard-labels.md
+
+enables:
+  - "v0.1-02 Release Engineering (CI gate for tags; versions pinned in images)"
+  - "Trustworthy CI for every v0.1 session"
+  - "v0.1-08 npm audit remediation (10 findings recorded)"
 ---
 
-# Session: Housekeeping & CI Green (ACTIVE)
+# Session: Housekeeping & CI Green (CLOSED)
 
 ## Problem
 

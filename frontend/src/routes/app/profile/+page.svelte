@@ -95,14 +95,14 @@
 	}[] = [
 		{
 			key: 'private',
-			label: 'Private Sector',
-			description: 'PLC, Ltd, Charity, LLP, Partnership',
+			label: 'Your Organisation',
+			description: 'Find your duties and rights',
 			primaryPrefixes: ['Org:']
 		},
 		{
 			key: 'public',
-			label: 'Public Sector',
-			description: 'Government body, authority, regulator',
+			label: 'Government Body',
+			description: 'Find your responsibilities and powers',
 			primaryPrefixes: ['Gvt:', 'EU:', 'Crown', 'HM ']
 		}
 	];
@@ -119,6 +119,32 @@
 		'EU:': 'European'
 	};
 
+	// SC: sub-prefix groups for concertina reveals
+	const SC_SUB_GROUPS: Record<string, string> = {
+		'C:': 'Construction',
+		'T&L:': 'Transport & Logistics'
+	};
+
+	// Actors promoted from Ind:/Spc: into the "Performs" group
+	const PROMOTED_TO_PERFORMS = ['Ind: Self-employed Worker', 'Spc: Trade Union'];
+
+	function getScSubPrefix(actor: string): string | null {
+		const afterSc = actor.replace(/^SC:\s*/, '');
+		for (const sub of Object.keys(SC_SUB_GROUPS)) {
+			if (afterSc.startsWith(sub)) return sub;
+		}
+		return null;
+	}
+
+	function stripAllPrefixes(label: string): string {
+		const re = /^(?:Org|Ind|Gvt|SC|Svc|Spc|EU|HM|C|Public|Offshore|T&L):\s*/;
+		let result = label;
+		while (re.test(result)) {
+			result = result.replace(re, '');
+		}
+		return result;
+	}
+
 	const TOTAL_STEPS = STEPS.length;
 	const REVIEW_STEP = TOTAL_STEPS; // zero-indexed: 0..TOTAL_STEPS-1 are wizard steps, TOTAL_STEPS is review
 
@@ -132,7 +158,16 @@
 
 	let definitionTerm: string | null = null;
 	let selectedOrgType: OrgType | null = null;
-	let showCrossCutting = false;
+	let openSubGroups = new Set<string>();
+
+	function toggleSubGroup(key: string) {
+		if (openSubGroups.has(key)) {
+			openSubGroups.delete(key);
+		} else {
+			openSubGroups.add(key);
+		}
+		openSubGroups = openSubGroups;
+	}
 
 	function lookupDefinition(profileKey: string, tag: string) {
 		// Actor steps use actor label prefixes; fitness steps use snake_case
@@ -334,13 +369,21 @@
 
 	// ── Identity step reactive data ─────────────────────────────────
 
+	interface ScSubGroup {
+		key: string;
+		label: string;
+		actors: string[];
+	}
+
 	$: identityActors = (() => {
-		if (!selectedOrgType)
-			return {
-				primary: [] as { prefix: string; label: string; actors: string[] }[],
-				orgRoles: [] as string[],
-				crossCutting: [] as string[]
-			};
+		const empty = {
+			public: null as null | { prefix: string; label: string; actors: string[] }[],
+			primary: [] as string[],
+			performs: [] as string[],
+			performsSubGroups: [] as ScSubGroup[],
+			has: [] as string[]
+		};
+		if (!selectedOrgType) return empty;
 
 		// Merge all actors from both vocab lists, deduplicate
 		const allActors = [
@@ -348,41 +391,75 @@
 		].filter(isValidLabel);
 
 		if (selectedOrgType === 'public') {
-			// Public: Gvt:*, EU:*, Crown, HM — no extras
+			// Government Body: Gvt:*, EU:*, Crown, HM — grouped by prefix
 			const pubPrefixes = ['Gvt:', 'EU:', 'Crown', 'HM '];
-			const primary = allActors.filter((a) => matchesAnyPrefix(a, pubPrefixes));
+			const pubActors = allActors.filter((a) => matchesAnyPrefix(a, pubPrefixes));
 			const groups = new Map<string, string[]>();
-			for (const actor of primary.sort()) {
+			for (const actor of pubActors.sort()) {
 				const prefix = getActorPrefix(actor);
 				if (!groups.has(prefix)) groups.set(prefix, []);
 				groups.get(prefix)!.push(actor);
 			}
 			return {
-				primary: [...groups.entries()].map(([prefix, actors]) => ({
+				...empty,
+				public: [...groups.entries()].map(([prefix, actors]) => ({
 					prefix,
 					label: PREFIX_LABELS[prefix] || prefix,
 					actors
-				})),
-				orgRoles: [],
-				crossCutting: []
+				}))
 			};
 		}
 
-		// Private Sector: Org:* primary, Ind:* org roles, everything else cross-cutting
-		const primary = allActors.filter((a) => a.startsWith('Org:'));
-		const primaryGroups =
-			primary.length > 0 ? [{ prefix: 'Org:', label: 'Organisation', actors: primary.sort() }] : [];
-
-		const orgRoles = allActors.filter((a) => a.startsWith('Ind:')).sort();
-
+		// Your Organisation — primary + performs + has
 		const govPrefixes = ['Gvt:', 'EU:', 'Crown', 'HM '];
-		const crossActors = allActors
+		const promoted = new Set(PROMOTED_TO_PERFORMS);
+
+		// Primary: Org:* + promoted actors (Self-employed Worker, Trade Union)
+		const primary: string[] = [];
+		// Performs: SC: (non-sub-grouped) + Svc: + Public: + Offshore: + unlabeled
+		const performs: string[] = [];
+		const scSubGrouped = new Map<string, string[]>();
+
+		for (const a of allActors) {
+			if (matchesAnyPrefix(a, govPrefixes)) continue;
+
+			if (a.startsWith('Org:') || promoted.has(a)) {
+				primary.push(a);
+			} else if (a.startsWith('SC:')) {
+				const sub = getScSubPrefix(a);
+				if (sub) {
+					if (!scSubGrouped.has(sub)) scSubGrouped.set(sub, []);
+					scSubGrouped.get(sub)!.push(a);
+				} else {
+					performs.push(a);
+				}
+			} else if (a.startsWith('Ind:') || a.startsWith('Spc:')) {
+				// handled below in "has" (unless promoted)
+			} else {
+				performs.push(a);
+			}
+		}
+
+		// Build sub-group concertinas
+		const performsSubGroups: ScSubGroup[] = [...scSubGrouped.entries()]
+			.map(([key, actors]) => ({
+				key,
+				label: SC_SUB_GROUPS[key] || key,
+				actors: actors.sort()
+			}))
+			.sort((a, b) => a.label.localeCompare(b.label));
+
+		// Has: Ind:* (minus promoted) + Spc:* (minus promoted)
+		const has = allActors
 			.filter(
-				(a) => !a.startsWith('Org:') && !a.startsWith('Ind:') && !matchesAnyPrefix(a, govPrefixes)
+				(a) =>
+					(a.startsWith('Ind:') || a.startsWith('Spc:')) &&
+					!promoted.has(a) &&
+					!matchesAnyPrefix(a, govPrefixes)
 			)
 			.sort();
 
-		return { primary: primaryGroups, orgRoles, crossCutting: crossActors };
+		return { ...empty, primary: primary.sort(), performs: performs.sort(), performsSubGroups, has };
 	})();
 
 	$: identitySelectedCount = (() => {
@@ -724,7 +801,7 @@
 								<button
 									on:click={() => {
 										selectedOrgType = orgType.key;
-										showCrossCutting = false;
+										openSubGroups = new Set();
 									}}
 									class="p-4 rounded-lg border-2 text-left transition-colors
 										{selectedOrgType === orgType.key
@@ -737,19 +814,17 @@
 							{/each}
 						</div>
 
-						{#if selectedOrgType}
-							<!-- Primary actors -->
-							{#each identityActors.primary as group}
-								{#if identityActors.primary.length > 1}
+						{#if selectedOrgType === 'public' && identityActors.public}
+							<!-- Government Body: grouped by prefix -->
+							{#each identityActors.public as group}
+								{#if identityActors.public.length > 1}
 									<div class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 mt-4">
 										{group.label}
 									</div>
 								{/if}
 								<div class="flex flex-wrap gap-2">
 									{#each group.actors as tag (tag)}
-										{@const selected =
-											(profile.governed_actors || []).includes(tag) ||
-											(profile.government_actors || []).includes(tag)}
+										{@const selected = (profile.government_actors || []).includes(tag)}
 										<span
 											class="inline-flex items-center {TAG_BASE} {selected
 												? TAG_ACTIVE
@@ -782,13 +857,16 @@
 								</div>
 							{/each}
 
-							<!-- Roles within your organisation (Ind:*) — Private Sector only -->
-							{#if identityActors.orgRoles.length > 0}
-								<div class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 mt-6">
-									Roles within your organisation
+							{#if identitySelectedCount > 0}
+								<div class="mt-3 text-xs text-gray-500">
+									{identitySelectedCount} role{identitySelectedCount !== 1 ? 's' : ''} selected
 								</div>
-								<div class="flex flex-wrap gap-2">
-									{#each identityActors.orgRoles as tag (tag)}
+							{/if}
+						{:else if selectedOrgType === 'private'}
+							<!-- Primary: Org:* + promoted (Self-employed Worker, Trade Union) -->
+							{#if identityActors.primary.length > 0}
+								<div class="flex flex-wrap gap-2 mb-4">
+									{#each identityActors.primary as tag (tag)}
 										{@const selected = (profile.governed_actors || []).includes(tag)}
 										<span
 											class="inline-flex items-center {TAG_BASE} {selected
@@ -796,7 +874,7 @@
 												: TAG_INACTIVE}"
 										>
 											<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
-												{stripPrefix(tag)}
+												{stripAllPrefixes(tag)}
 											</button>
 											<button
 												on:click|stopPropagation={() => lookupDefinition('governed_actors', tag)}
@@ -822,15 +900,55 @@
 								</div>
 							{/if}
 
-							<!-- Cross-cutting roles — Private Sector only -->
-							{#if identityActors.crossCutting.length > 0}
-								<div class="mt-6 pt-4 border-t border-gray-100">
+							<!-- Roles Your Organisation Performs (SC:* supply chain roles) -->
+							<div class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+								Roles your organisation performs
+							</div>
+							<div class="flex flex-wrap gap-2">
+								{#each identityActors.performs as tag (tag)}
+									{@const selected = (profile.governed_actors || []).includes(tag)}
+									<span
+										class="inline-flex items-center {TAG_BASE} {selected
+											? TAG_ACTIVE
+											: TAG_INACTIVE}"
+									>
+										<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
+											{stripAllPrefixes(tag)}
+										</button>
+										<button
+											on:click|stopPropagation={() => lookupDefinition('governed_actors', tag)}
+											class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
+											title="Legal definition"
+										>
+											<svg
+												class="w-3.5 h-3.5"
+												fill="none"
+												viewBox="0 0 24 24"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+												/>
+											</svg>
+										</button>
+									</span>
+								{/each}
+							</div>
+
+							<!-- SC: sub-group concertinas -->
+							{#each identityActors.performsSubGroups as subGroup (subGroup.key)}
+								<div class="mt-3">
 									<button
-										on:click={() => (showCrossCutting = !showCrossCutting)}
-										class="text-sm font-medium text-gray-700 flex items-center gap-1"
+										on:click={() => toggleSubGroup(subGroup.key)}
+										class="text-xs font-medium text-gray-600 flex items-center gap-1 hover:text-gray-800"
 									>
 										<svg
-											class="w-4 h-4 transition-transform {showCrossCutting ? 'rotate-90' : ''}"
+											class="w-3.5 h-3.5 transition-transform {openSubGroups.has(subGroup.key)
+												? 'rotate-90'
+												: ''}"
 											fill="none"
 											viewBox="0 0 24 24"
 											stroke="currentColor"
@@ -838,11 +956,11 @@
 										>
 											<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
 										</svg>
-										Do you also...?
+										{subGroup.label}
 									</button>
-									{#if showCrossCutting}
-										<div class="flex flex-wrap gap-2 mt-3">
-											{#each identityActors.crossCutting as tag (tag)}
+									{#if openSubGroups.has(subGroup.key)}
+										<div class="flex flex-wrap gap-2 mt-2 ml-5">
+											{#each subGroup.actors as tag (tag)}
 												{@const selected = (profile.governed_actors || []).includes(tag)}
 												<span
 													class="inline-flex items-center {TAG_BASE} {selected
@@ -850,7 +968,7 @@
 														: TAG_INACTIVE}"
 												>
 													<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
-														{stripPrefix(tag)}
+														{stripAllPrefixes(tag)}
 													</button>
 													<button
 														on:click|stopPropagation={() =>
@@ -876,6 +994,46 @@
 											{/each}
 										</div>
 									{/if}
+								</div>
+							{/each}
+
+							<!-- Roles Your Organisation Has -->
+							{#if identityActors.has.length > 0}
+								<div class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 mt-6">
+									Roles your organisation has
+								</div>
+								<div class="flex flex-wrap gap-2">
+									{#each identityActors.has as tag (tag)}
+										{@const selected = (profile.governed_actors || []).includes(tag)}
+										<span
+											class="inline-flex items-center {TAG_BASE} {selected
+												? TAG_ACTIVE
+												: TAG_INACTIVE}"
+										>
+											<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
+												{stripAllPrefixes(tag)}
+											</button>
+											<button
+												on:click|stopPropagation={() => lookupDefinition('governed_actors', tag)}
+												class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
+												title="Legal definition"
+											>
+												<svg
+													class="w-3.5 h-3.5"
+													fill="none"
+													viewBox="0 0 24 24"
+													stroke="currentColor"
+													stroke-width="2"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+													/>
+												</svg>
+											</button>
+										</span>
+									{/each}
 								</div>
 							{/if}
 

@@ -1,19 +1,102 @@
 ---
 session: "v0.1-05: Change Pipeline"
-status: active
+status: suspended
 opened: 2026-09-25
+suspended: 2026-09-25
+outcome: partial
 parent: v0.1/meta.md
-depends_on: ["v0.1/03-prod-data-unblock"]
 
 summary: >
-  QQ's top priority is keeping up with legal change. ChangeDetector and
-  ChangeNotifier exist but nothing ever calls them. Wire the trigger, set a
-  baseline checkpoint, and get /app/changes working end to end.
+  Legal change now reaches the change feed in dev. Snapshot-diff detection
+  runs daily via Oban; a change is "law X affected by law Y" (amended /
+  part-revoked / revoked), plus new laws the screener says apply. The feed
+  shows plain-language changes and exports CSV, and was checked in the
+  browser by the user. Remaining: baseline and exit check in prod, which
+  waits on session 03 (prod data, legal#133/#27).
+
+decisions:
+  - what: Model change as "law X affected by law Y", with one event type (law_amended) and a change_type
+    why: User. A revocation is the outcome of an amending or revoking law, not a separate kind of change.
+    result: "law_amended with change_type amended (moderate, 60d) / part_revoked / revoked (major, 30d) and caused_by; new_law_available for new applicable laws"
+  - what: Detect by diffing a global per-law snapshot; the first run is a silent baseline
+    why: The old detector flagged every register law with a revoked/part status (whole history), and match_score_changed fired on any row update (2,112 events)
+    result: 3,774 laws watched; replay gave the correct four events; a second run raised nothing
+  - what: New laws decided by Fitness.Screener
+    why: The old raw DRRP/fitness score disagreed with the screener users see
+    result: new_law_available carries the screener tier and caveats; major only when strong without caveats
+  - what: Delete QQ's 2,411 undecided legacy change events in dev (user-approved); leave other orgs' events
+    why: They came from the old logic and would have flooded QQ's feed
+    result: QQ feed starts empty; the 4 replay test events were deleted after the browser check
+  - what: In-app feed plus CSV export; email digest deferred past v0.1
+    why: User. QQ does assessment in its own tool, so CSV is the hand-off
+    result: "GET /api/screening/changes/export and an Export CSV button"
+  - what: Enable Oban (it was a dependency but never started)
+    why: A daily job needs a scheduler that persists across restarts; nothing in Oban could run before, including Baserow sync workers
+    result: Oban config, supervision, oban_jobs migration v14; ChangeDetectionWorker cron 05:00 UTC; mix changes.detect
+  - what: Categorical jurisdiction exclusion for devolved legislation (user-approved)
+    why: The browser check showed an NI regulation raised as a new law for GB-only QQ; the law type code is authoritative, while geo_extent and trees were wrong
+    result: 40 NI laws no longer match QQ (screener-only 172 → 132), no register laws lost
+
+metrics:
+  snapshot: { watched_laws: 3774, corpus: 3250, register_only: 524 }
+  replay: { amended: 1, part_revoked: 1, revoked: 1, new_law: 1, second_run_changes: 0 }
+  qq_dev_events: { legacy_deleted: 2411, replay_deleted: 4, remaining: 0 }
+  jurisdiction: { qq_ni_matches_removed: 40, strong: 22, probable: 18, nisr_with_uk_extent: 16 }
+  qq_benchmark_reviewed: { screener_only: 132, both: 262, evaluable_agreement: 0.684 }
+  tests: { backend: 88, frontend: 138 }
+
+lessons:
+  - title: "A change detector without a baseline replays history"
+    detail: "Status detection that looks for 'is revoked and not yet reported' reports every revoked law in the register on the first run (QQ has 104). Diff against a stored snapshot and make the first run silent."
+    tag: data
+  - title: "Oban can be a dependency and still never run"
+    detail: "oban was in mix.exs and workers existed, but nothing started Oban and there was no oban_jobs table, so Oban.insert would fail and no scheduled work ever ran. Check the supervision tree, not just deps."
+    tag: infrastructure
+  - title: "Look at the feed in a browser: it found a screener bug the benchmark hid"
+    detail: "The first new law in QQ's feed was an NI regulation. The benchmark had it only as an unexplained screener-only row among 172. Seeing it as a user would made the fault obvious: 40 NI laws matched a GB-only org."
+    tag: data
+  - title: "Law type codes beat geo_extent for jurisdiction"
+    detail: "16 of 48 in-force nisr laws with trees have geo_extent UK, and trees let place types (premises) satisfy the territorial dimension. The devolved type code (nisr, ssi, wsi...) is the reliable signal for a categorical exclusion."
+    tag: data
+  - title: "NULL booleans from SQL break Elixir's strict and"
+    detail: "in_corpus was NULL for register-only laws with no is_making/country and raised BadBooleanError. Coalesce in SQL and normalise with == true on load."
+    tag: schema
+  - title: "Hub hand-off: compliance only learns the login via /auth/callback"
+    detail: "Hub (:5173) and compliance (:5176) are different origins. The hub has no Compliance tile; its Controls tile only works in dev because VITE_CONTROLS_URL defaults to localhost:5176. Prod needs a real Compliance tile and URL (session 08)."
+    tag: infrastructure
+
+artifacts:
+  - backend/lib/sertantai_compliance/sync/change_detector.ex
+  - backend/lib/sertantai_compliance/sync/law_change_snapshot.ex
+  - backend/lib/sertantai_compliance/sync/workers/change_detection_worker.ex
+  - backend/lib/mix/tasks/changes.detect.ex
+  - backend/lib/sertantai_compliance/fitness/jurisdiction.ex
+  - backend/lib/sertantai_compliance/fitness/screener.ex
+  - backend/lib/sertantai_compliance/fitness/benchmark.ex
+  - backend/lib/sertantai_compliance/csv.ex
+  - backend/lib/sertantai_compliance_web/controllers/screening_controller.ex
+  - backend/lib/sertantai_compliance/application.ex
+  - backend/config/config.exs
+  - backend/priv/repo/migrations/20260925111215_add_law_change_snapshots.exs
+  - backend/priv/repo/migrations/20260925111300_add_oban_jobs.exs
+  - backend/test/sertantai_compliance/sync/change_detector_test.exs
+  - backend/test/sertantai_compliance/fitness/jurisdiction_test.exs
+  - backend/test/sertantai_compliance_web/controllers/screening_changes_test.exs
+  - frontend/src/lib/views/change-feed.ts
+  - frontend/src/routes/app/changes/+page.svelte
+
+depends_on:
+  - v0.1/03-prod-data-unblock.md
+  - v0.1/04b-screener-tuning.md
+
+enables:
+  - "QQ's top v0.1 need (keeping abreast of legal change) once prod data lands"
+  - "v0.1-08: hub Compliance tile and real-user hand-off"
 ---
 
-# Session: Change Pipeline (ACTIVE)
+# Session: Change Pipeline (SUSPENDED)
 
-> **Resumed 2026-09-25.** QQ's top priority is keeping abreast of legal change. Building against dev data now; the final prod check waits on session 03 (legal#133/#27).
+> **Suspended 2026-09-25**: dev pipeline complete and checked in the browser; waiting on prod data (session 03, legal#133/#27). Resume for the prod baseline and the exit check: a real legal change in QQ's prod feed.
 
 ## Problem
 
@@ -32,8 +115,8 @@ summary: >
 - ✅ Tests for diff/status (8 new; backend 79)
 - ✅ API: feed shows `law_amended`, `new_law_available` and legacy `law_status_changed` (drops `match_score_changed`); `GET /changes/export` CSV (pending by default, `?status=all`), soonest review first; shared `SertantaiCompliance.CSV`
 - ✅ Change feed UI: groups "Laws in your register amended or revoked" / "New laws that apply to you"; plain-language lines ("Partly revoked by UK_asp_2008_5", "New law that applies to you · strong screener match"); archive/keep for revocations, acknowledge for amendments; Export CSV button. `$lib/views/change-feed.ts` + tests (frontend 138, backend 81)
-- ⬜ Clear the 4 replay test events for QQ in dev (kept for now so the feed can be seen in the UI); the dev baseline is already current
-- ⬜ Prod: baseline on the first run after session 03's data push; exit criterion below
+- ✅ Cleared the 4 replay test events after the user's browser check; the dev baseline is current and QQ's feed is empty
+- ⏸️ Prod: baseline on the first run after session 03's data push; exit criterion below (blocked — session 03 / legal#133, #27)
 
 ## Exit criteria
 

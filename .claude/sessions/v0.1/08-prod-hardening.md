@@ -28,6 +28,9 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 - ✅ Prod compliance **stopped** 2026-09-25 13:26 UTC (user's decision) until the fix is deployed: backend, frontend and Electric (`docker compose stop`; containers kept). Both leak paths now return 502. Prod exposure was not probed.
 - ⬜ Deploy the fix via a pinned release (`deploy-prod.sh --version …`, which starts the containers again); then re-baseline change detection after legal#27's data sync
 - ✅ Browser check (user): `/browse` still syncs in dev with Gatekeeper-validated live polls
+- ✅ **Hub Compliance tile** (sertantai-hub `63e3ba8`, pushed; images `:latest` + `:sha-63e3ba8` published): `COMPLIANCE_URL` → `/app/screening` via `/auth/callback`; health proxy `compliance` entry; Controls defaults moved to 5177/4007
+- ⬜ Local: legal's `docker-compose.services.yml` needs `VITE_COMPLIANCE_URL`, `VITE_CONTROLS_URL=:5177` and `COMPLIANCE_SERVICE_URL`, then recreate the hub services (requested from the legal session); then check the tile
+- ⬜ Prod: sertantai-stack `93d6a50` (hub-backend `COMPLIANCE_SERVICE_URL`) is pushed but **not pulled on the server**; pull and recreate hub-backend when compliance is restarted (#25)
 - ⬜ **Real-user auth**: an actual QQ user account goes hub → auth → compliance end to end. Check token refresh, logout, and org scoping on every API route and Electric shape (legal#29, #36, #47).
 - ⬜ **Monitoring**: uptime check on `/health`, error tracking (backend and frontend), and log retention.
 - ⬜ **Performance**: first-load sync time for browse and glossary on a typical corporate laptop and network.
@@ -80,3 +83,11 @@ npm 11 warns that esbuild's and svelte-preprocess's install scripts are "not cov
 - The driver in sertantai-legal was **GridLite kit 0.10.0, which requires Svelte 5**. Compliance can't move to it yet: `gridlite-adapter-pglite` (latest 0.7.3) still requires GridLite kit ^0.7. The adapter ↔ kit mismatch is currently hidden by `legacy-peer-deps`.
 - Legal is on Svelte 5 but still Vite 5, so its migration didn't clear the Vite finding either.
 - Plan: one post-v0.1 session. Release the adapter for GridLite 0.10, then Svelte 5, then GridLite 0.10, then Vite 8. Pull it forward if QQ needs a GridLite 0.9/0.10 feature or scans dependencies.
+
+## Hub Compliance tile (2026-09-25)
+
+- Root cause: hub `f439621` gave compliance the old Controls ports (4004/5176) and moved Controls to 4007/5177, but only in the README. `env.ts` and the health proxy still sent "Controls" to 5176/4004, which is why the Controls tile opened compliance.
+- Local hub containers come from **`~/Desktop/sertantai-legal/docker-compose.services.yml`**, running published `:latest` hub images. Code changes only reach them after an image publish plus env changes in that file.
+- The hub push scripts failed silently: `GHCR_TOKEN` in the user's shell is stale, and `docker login` fails under `set -e` with no message. `env -u GHCR_TOKEN` uses the existing Docker login.
+- The builds first failed with "no space left on device" (`/var/home` 97% full). Pruned only the Docker build cache (6.7 GB); images, containers and volumes were untouched.
+- Hub has 26 failing backend tests unrelated to this change (hub#23, `organizations` table missing in the test DB). Verified by running the suite without the change: 77/103.

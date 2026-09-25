@@ -11,9 +11,12 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
   - `Match` — leaf node: does the customer's dimension contain any of the codes?
   - `And` — all children must match
   - `Or` — any child must match
-  - `Not` — child must NOT match (DisappliesTo)
+  - `Not` — DisappliesTo. Excludes only when the org is wholly within the
+    disapplication; otherwise included with a caveat (the screener prefers
+    inclusion; see `@caveat_factor`)
   - `Conditional` — evaluate `then` only if `condition` matches
-  - `TimeWindow` — temporal gate: is today within [from, to]?
+  - `TimeWindow` — temporal gate. Outside the window the law is still
+    included with a caveat: the corpus only holds laws legal marks in force
 
   ## Customer Profile
 
@@ -39,12 +42,31 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
           node_confidence: float()
         }
 
+  @typedoc """
+  Why an included law may not apply after all, for human review: a matching
+  disapplication the org isn't wholly within, or a time window the law's
+  in-force status contradicts.
+  """
+  @type caveat ::
+          %{kind: String.t(), dimension: String.t(), codes: [String.t()]}
+          | %{kind: String.t(), from: String.t() | nil, to: String.t() | nil}
+
   @type detailed_result :: %{
           applies: boolean(),
           confidence: float(),
           reasons: [reason()],
+          caveats: [caveat()],
           unmatched_dimensions: [String.t()]
         }
+
+  # The screener prefers inclusion: a human sense-checks its register and can
+  # disapply a law, whereas a wrongly excluded law is never seen. Only
+  # categorical facts exclude (a law revoked in full is filtered out of the
+  # corpus; an org wholly within a disapplication). A single matching
+  # disapplication condition, or a time window contradicted by the law's
+  # in-force status, includes the law with a caveat and this confidence
+  # factor, so it ranks lower for review (1.0 strong -> 0.6 probable).
+  @caveat_factor 0.6
 
   @doc """
   Evaluate a compiled applicability tree against a customer profile.
@@ -98,11 +120,12 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
   """
   @spec evaluate_with_reasons(tree() | nil, profile()) :: detailed_result()
   def evaluate_with_reasons(nil, _profile) do
-    %{applies: false, confidence: 0.0, reasons: [], unmatched_dimensions: []}
+    %{applies: false, confidence: 0.0, reasons: [], caveats: [], unmatched_dimensions: []}
   end
 
   def evaluate_with_reasons(tree, profile) when is_map(tree) and is_map(profile) do
-    {applies, confidence, reasons} = eval_node_with_reasons(tree, profile)
+    {applies, confidence, findings} = eval_node_with_reasons(tree, profile)
+    {caveats, reasons} = Enum.split_with(findings, &Map.has_key?(&1, :kind))
     tree_dimensions = collect_dimensions(tree)
     profile_dimensions = MapSet.new(Map.keys(profile))
 
@@ -121,19 +144,23 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
       applies: applies,
       confidence: confidence,
       reasons: reasons,
+      caveats: if(applies, do: Enum.uniq(caveats), else: []),
       unmatched_dimensions: Enum.uniq(unmatched ++ empty_profile_dims)
     }
   end
 
   def evaluate_with_reasons(tree, profile) when is_binary(tree) do
     case Jason.decode(tree) do
-      {:ok, parsed} -> evaluate_with_reasons(parsed, profile)
-      {:error, _} -> %{applies: false, confidence: 0.0, reasons: [], unmatched_dimensions: []}
+      {:ok, parsed} ->
+        evaluate_with_reasons(parsed, profile)
+
+      {:error, _} ->
+        %{applies: false, confidence: 0.0, reasons: [], caveats: [], unmatched_dimensions: []}
     end
   end
 
   def evaluate_with_reasons(_, _) do
-    %{applies: false, confidence: 0.0, reasons: [], unmatched_dimensions: []}
+    %{applies: false, confidence: 0.0, reasons: [], caveats: [], unmatched_dimensions: []}
   end
 
   @doc """
@@ -320,7 +347,12 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
 
   defp eval_node(%{"op" => "Not", "child" => child}, profile) do
     {child_applies, confidence} = eval_node(child, profile)
-    {not child_applies, confidence}
+
+    cond do
+      not child_applies -> {true, confidence}
+      wholly_excluded?(child, profile) -> {false, confidence}
+      true -> {true, @caveat_factor}
+    end
   end
 
   defp eval_node(%{"op" => "Conditional", "condition" => condition, "then" => then_node}, profile) do
@@ -339,10 +371,17 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
     before_to = is_nil(to) or Date.compare(today, Date.from_iso8601!(to)) != :gt
     in_window = after_from and before_to
 
-    # TimeWindow may wrap an inner node, or be a standalone temporal gate
+    # TimeWindow may wrap an inner node, or be a standalone temporal gate.
+    # Outside the window: included with a caveat (see @caveat_factor).
+    factor = if in_window, do: 1.0, else: @caveat_factor
+
     case Map.get(node, "inner") do
-      nil -> {in_window, 1.0}
-      inner -> if in_window, do: eval_node(inner, profile), else: {false, 1.0}
+      nil ->
+        {true, factor}
+
+      inner ->
+        {applies, confidence} = eval_node(inner, profile)
+        {applies, confidence * factor}
     end
   end
 
@@ -408,8 +447,25 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
   end
 
   defp eval_node_with_reasons(%{"op" => "Not", "child" => child}, profile) do
-    {child_applies, confidence, reasons} = eval_node_with_reasons(child, profile)
-    {not child_applies, confidence, reasons}
+    {child_applies, confidence, child_findings} = eval_node_with_reasons(child, profile)
+
+    cond do
+      not child_applies ->
+        {true, confidence, []}
+
+      wholly_excluded?(child, profile) ->
+        {false, confidence, []}
+
+      true ->
+        caveats =
+          child_findings
+          |> Enum.reject(&Map.has_key?(&1, :kind))
+          |> Enum.map(
+            &%{kind: "disapplication", dimension: &1.dimension, codes: &1.matched_codes}
+          )
+
+        {true, @caveat_factor, caveats}
+    end
   end
 
   defp eval_node_with_reasons(
@@ -435,20 +491,66 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
     before_to = is_nil(to) or Date.compare(today, Date.from_iso8601!(to)) != :gt
     in_window = after_from and before_to
 
+    {factor, caveats} =
+      if in_window,
+        do: {1.0, []},
+        else: {@caveat_factor, [%{kind: "time_window", from: from, to: to}]}
+
     case Map.get(node, "inner") do
       nil ->
-        {in_window, 1.0, []}
+        {true, factor, caveats}
 
       inner ->
-        if in_window do
-          eval_node_with_reasons(inner, profile)
-        else
-          {false, 1.0, []}
-        end
+        {applies, confidence, findings} = eval_node_with_reasons(inner, profile)
+        {applies, confidence * factor, findings ++ caveats}
     end
   end
 
   defp eval_node_with_reasons(_node, _profile), do: {false, 0.0, []}
+
+  # ── Disapplication coverage ─────────────────────────────────────
+
+  # An org is wholly within a disapplication when, in every dimension the Not
+  # uses, each of the org's codes is covered by the Not's codes (directly or,
+  # for territory, via an ancestor: a Scotland-only org is within "not in
+  # great_britain"). An org with anything outside the exclusion stays in.
+  @doc false
+  # Public for the benchmark, which must attribute exclusions exactly as the
+  # evaluator decides them.
+  @spec wholly_excluded?(tree(), profile()) :: boolean()
+  def wholly_excluded?(not_child, profile) do
+    not_child
+    |> match_codes_by_dimension()
+    |> Enum.map(fn {dim, not_codes} -> {dim, not_codes, Map.get(profile, dim, [])} end)
+    |> Enum.reject(fn {_dim, _not_codes, org_codes} -> org_codes == [] end)
+    |> case do
+      [] ->
+        false
+
+      dims ->
+        Enum.all?(dims, fn {dim, not_codes, org_codes} ->
+          Enum.all?(org_codes, fn code ->
+            Enum.any?(expand_codes(dim, [code]), &(&1 in not_codes))
+          end)
+        end)
+    end
+  end
+
+  defp match_codes_by_dimension(%{"op" => "Match", "dimension" => dim, "codes" => codes}),
+    do: %{dim => codes}
+
+  defp match_codes_by_dimension(node) do
+    node
+    |> child_nodes()
+    |> Enum.map(&match_codes_by_dimension/1)
+    |> Enum.reduce(%{}, &Map.merge(&2, &1, fn _dim, a, b -> Enum.uniq(a ++ b) end))
+  end
+
+  defp child_nodes(%{"children" => children}), do: children
+  defp child_nodes(%{"condition" => c, "then" => t}), do: [c, t]
+  defp child_nodes(%{"child" => child}), do: [child]
+  defp child_nodes(%{"inner" => inner}), do: [inner]
+  defp child_nodes(_), do: []
 
   # ── Dimension collection ────────────────────────────────────────
 

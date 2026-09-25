@@ -49,7 +49,7 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
   @reference_headers ~w(law_name status source)
 
   @triage_headers ~w(law_name title family geo_extent agreement side cause detail
-                     register_status register_source confidence tier matched_dimensions)
+                     register_status register_source confidence tier matched_dimensions caveats)
 
   @type reference_row :: %{law_name: String.t(), status: String.t(), source: String.t()}
 
@@ -187,7 +187,8 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
       register_source: ref.source,
       confidence: "",
       tier: "",
-      matched_dimensions: ""
+      matched_dimensions: "",
+      caveats: ""
     }
   end
 
@@ -196,8 +197,15 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
   defp screener_only_cause(s) do
     tree_dims = tree_dimensions(s.law.compiled_applicability)
     matched_dims = s.reasons |> Enum.map(& &1.dimension) |> Enum.uniq()
+    caveat_kinds = s.caveats |> Enum.map(& &1.kind) |> Enum.uniq()
 
     cond do
+      "disapplication" in caveat_kinds ->
+        {"tree", "soft_disapplication", format_caveats(s.caveats)}
+
+      "time_window" in caveat_kinds ->
+        {"tree", "time_window_caveat", format_caveats(s.caveats)}
+
       MapSet.subset?(tree_dims, MapSet.new(["territorial", "temporal"])) ->
         {"tree", "territory_only_tree", ""}
 
@@ -214,8 +222,14 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
 
   defp register_only_cause(law, profile) do
     tree = law.compiled_applicability
+    # Checked first: what-ifs add codes, which can take the org out of a
+    # categorical exclusion and hide it.
+    excluding = excluding_disapplications(tree, profile)
 
     cond do
+      excluding != [] ->
+        {"tree", "disapplied_by_not", "org wholly within Not: " <> Enum.join(excluding, " ")}
+
       applies_with?(tree, profile, "material", @generic_codes) ->
         {"tree", "generic_code_gate", ""}
 
@@ -267,7 +281,8 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
         {"profile_or_tree", "multi_condition_miss", detail}
 
       triggered_nots != [] ->
-        {"tree", "disapplied_by_not", "profile triggers Not: " <> Enum.join(triggered_nots, " ")}
+        {"tree", "soft_disapplication_blocks",
+         "profile triggers Not: " <> Enum.join(triggered_nots, " ")}
 
       has_op?(tree, "TimeWindow") ->
         {"tree", "outside_time_window", detail}
@@ -297,8 +312,19 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
       confidence: if(s.applies, do: Float.round(s.confidence, 3), else: ""),
       tier: if(s.applies, do: tier(s.confidence), else: ""),
       matched_dimensions:
-        s.reasons |> Enum.map(& &1.dimension) |> Enum.uniq() |> Enum.sort() |> Enum.join("/")
+        s.reasons |> Enum.map(& &1.dimension) |> Enum.uniq() |> Enum.sort() |> Enum.join("/"),
+      caveats: format_caveats(s.caveats)
     }
+  end
+
+  defp format_caveats(caveats) do
+    Enum.map_join(caveats, "; ", fn
+      %{kind: "disapplication", dimension: dim, codes: codes} ->
+        "may be disapplied: #{dim}:#{Enum.join(codes, ",")}"
+
+      %{kind: "time_window", from: from, to: to} ->
+        "time window #{from || "…"} to #{to || "…"}"
+    end)
   end
 
   @doc "Confidence tier, using the same thresholds as the screening API."
@@ -332,6 +358,31 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
     |> Map.new(fn {dim, codes} -> {dim, Enum.uniq(codes)} end)
   end
+
+  # Not nodes the evaluator treats as categorical exclusions for this
+  # profile (the org is wholly within them); returns the triggering codes.
+  defp excluding_disapplications(tree, profile) do
+    tree
+    |> not_nodes()
+    |> Enum.map(&not_child/1)
+    |> Enum.filter(fn child ->
+      child != nil and ApplicabilityEvaluator.evaluate(child, profile).applies and
+        ApplicabilityEvaluator.wholly_excluded?(child, profile)
+    end)
+    |> Enum.flat_map(fn child ->
+      child
+      |> collect_codes()
+      |> Enum.filter(fn {dim, code} -> code in Map.get(profile, dim, []) end)
+      |> Enum.map(fn {dim, code} -> "#{dim}:#{code}" end)
+    end)
+    |> Enum.uniq()
+  end
+
+  defp not_nodes(%{"op" => "Not"} = node), do: [node | not_nodes(not_child(node))]
+  defp not_nodes(%{"children" => children}), do: Enum.flat_map(children, &not_nodes/1)
+  defp not_nodes(%{"condition" => c, "then" => t}), do: not_nodes(c) ++ not_nodes(t)
+  defp not_nodes(%{"inner" => inner}), do: not_nodes(inner)
+  defp not_nodes(_), do: []
 
   # Codes outside Not (disapplies) subtrees: adding these can only help.
   defp positive_codes(tree) do

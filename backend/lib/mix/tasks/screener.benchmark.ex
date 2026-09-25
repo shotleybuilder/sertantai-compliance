@@ -19,7 +19,7 @@ defmodule Mix.Tasks.Screener.Benchmark do
       org_applicabilities before running; otherwise the existing snapshot is
       used, so results don't drift with the database
 
-  Output goes to `priv/benchmarks/<name>/runs/<date>-<label>/` (triage.csv,
+  Output goes to `priv/benchmarks/<name>/runs/<YYYY-MM-DDTHHMM>-<label>/` (triage.csv,
   summary.json, summary.md) and is compared with the previous run of the same
   label.
   """
@@ -62,8 +62,10 @@ defmodule Mix.Tasks.Screener.Benchmark do
 
     runs_dir = Path.join(base, "runs")
     previous = previous_summary(runs_dir, label)
-    run_at = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
-    out_dir = Path.join(runs_dir, "#{Date.utc_today()}-#{label}")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    run_at = DateTime.to_iso8601(now)
+    # Timestamped so same-day re-runs never overwrite an earlier run.
+    out_dir = Path.join(runs_dir, "#{Calendar.strftime(now, "%Y-%m-%dT%H%M")}-#{label}")
 
     result = Benchmark.run(reference, profile)
 

@@ -50,6 +50,16 @@ export interface MatchReason {
 	node_confidence: number;
 }
 
+/**
+ * Why an included law may not apply after all. The screener prefers
+ * inclusion: a matching disapplication the org isn't wholly within, or a
+ * time window contradicted by the law's in-force status, keeps the law in
+ * (at lower confidence) for the reviewer to decide.
+ */
+export type Caveat =
+	| { kind: 'disapplication'; dimension: string; codes: string[] }
+	| { kind: 'time_window'; from: string | null; to: string | null };
+
 export interface EvaluationMatch {
 	law_name: string;
 	title: string | null;
@@ -57,6 +67,7 @@ export interface EvaluationMatch {
 	applies: boolean;
 	confidence: number;
 	match_reasons: MatchReason[];
+	caveats?: Caveat[];
 	unmatched_dimensions: string[];
 	significance_rating: string | null;
 	significance_score: number | null;

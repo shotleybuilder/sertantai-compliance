@@ -35,6 +35,7 @@ defmodule SertantaiCompliance.Fitness.Screener do
           applies: boolean(),
           confidence: float(),
           reasons: [ApplicabilityEvaluator.reason()],
+          caveats: [ApplicabilityEvaluator.caveat()],
           unmatched_dimensions: [String.t()]
         }
 
@@ -106,6 +107,7 @@ defmodule SertantaiCompliance.Fitness.Screener do
         applies: result.applies,
         confidence: result.confidence,
         reasons: result.reasons,
+        caveats: result.caveats,
         unmatched_dimensions: result.unmatched_dimensions
       }
     end)

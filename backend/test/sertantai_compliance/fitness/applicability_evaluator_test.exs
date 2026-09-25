@@ -13,6 +13,7 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluatorTest do
                applies: false,
                confidence: 0.0,
                reasons: [],
+               caveats: [],
                unmatched_dimensions: []
              }
     end
@@ -186,7 +187,7 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluatorTest do
       assert result.applies == true
     end
 
-    test "Not node — negates matching child" do
+    test "Not node — excludes when the org is wholly within the disapplication" do
       tree = %{
         "op" => "Not",
         "child" => %{"op" => "Match", "dimension" => "personal", "codes" => ["employer"]}
@@ -197,8 +198,57 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluatorTest do
       result = ApplicabilityEvaluator.evaluate_with_reasons(tree, profile)
 
       assert result.applies == false
-      # Reasons still collected from the inner Match
-      assert length(result.reasons) == 1
+      assert result.reasons == []
+      assert result.caveats == []
+    end
+
+    test "Not node — one matching condition includes the law with a caveat" do
+      tree = %{
+        "op" => "And",
+        "children" => [
+          %{"op" => "Match", "dimension" => "personal", "codes" => ["employer"]},
+          %{
+            "op" => "Not",
+            "child" => %{
+              "op" => "Match",
+              "dimension" => "material",
+              "codes" => ["construction_work"]
+            }
+          }
+        ]
+      }
+
+      # The org does construction work, but much else besides
+      profile = %{"personal" => ["employer"], "material" => ["construction_work", "asbestos"]}
+
+      result = ApplicabilityEvaluator.evaluate_with_reasons(tree, profile)
+
+      assert result.applies == true
+      assert result.confidence == 0.6
+      assert [%{dimension: "personal", matched_codes: ["employer"]}] = result.reasons
+
+      assert result.caveats == [
+               %{kind: "disapplication", dimension: "material", codes: ["construction_work"]}
+             ]
+
+      assert ApplicabilityEvaluator.evaluate(tree, profile) == %{applies: true, confidence: 0.6}
+    end
+
+    test "Not node — territorial coverage uses the hierarchy" do
+      tree = %{
+        "op" => "Not",
+        "child" => %{"op" => "Match", "dimension" => "territorial", "codes" => ["great_britain"]}
+      }
+
+      # Scotland-only: wholly within "not in Great Britain"
+      assert %{applies: false} =
+               ApplicabilityEvaluator.evaluate(tree, %{"territorial" => ["scotland"]})
+
+      # Also operates in Northern Ireland: stays in, with a caveat
+      assert %{applies: true, confidence: 0.6} =
+               ApplicabilityEvaluator.evaluate(tree, %{
+                 "territorial" => ["scotland", "northern_ireland"]
+               })
     end
 
     test "Conditional node — condition met, evaluates then" do
@@ -291,8 +341,12 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluatorTest do
 
       result = ApplicabilityEvaluator.evaluate_with_reasons(tree, profile)
 
-      assert result.applies == false
-      assert result.reasons == []
+      # Legal marks the law in force (it's in the corpus), so an out-of-window
+      # tree is trusted less than that: included with a caveat.
+      assert result.applies == true
+      assert result.confidence == 0.6
+      assert [%{dimension: "personal"}] = result.reasons
+      assert result.caveats == [%{kind: "time_window", from: past, to: also_past}]
     end
 
     test "territorial hierarchy expansion reflected in reasons" do

@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EvaluationMatch, ScreeningProfile } from '$lib/api/screening';
 import {
+	caveatText,
 	filterByTab,
 	filterBySearch,
 	filterByFamily,
@@ -353,5 +354,19 @@ describe('profileDimensions', () => {
 
 		const certs = dims.find((d) => d.label === 'Certifications')!;
 		expect(certs.filled).toBe(false);
+	});
+});
+
+describe('caveatText', () => {
+	it('explains a disapplication the org is not wholly within', () => {
+		expect(
+			caveatText({ kind: 'disapplication', dimension: 'material', codes: ['construction_work'] })
+		).toContain('disapplies to construction_work (Material)');
+	});
+
+	it('explains a time window that conflicts with in-force status', () => {
+		expect(caveatText({ kind: 'time_window', from: '2017-04-03', to: '2017-04-15' })).toContain(
+			'(2017-04-03 to 2017-04-15)'
+		);
 	});
 });

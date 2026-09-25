@@ -68,11 +68,13 @@ defmodule SertantaiCompliance.Fitness.BenchmarkTest do
       law("no_tree", nil),
       law("generic", all([m("personal", ["employer"]), m("material", ["building"])])),
       law("gov", all([m("personal", ["local_authority"]), m("material", ["asbestos"])])),
+      # The profile's only material facts are asbestos and construction_work:
+      # wholly within this disapplication, so it's a categorical exclusion.
       law(
         "not",
         all([
           m("personal", ["employer"]),
-          %{"op" => "Not", "child" => m("material", ["construction_work"])}
+          %{"op" => "Not", "child" => m("material", ["asbestos", "construction_work"])}
         ])
       ),
       law(
@@ -90,7 +92,7 @@ defmodule SertantaiCompliance.Fitness.BenchmarkTest do
     assert %{
              side: "tree",
              cause: "disapplied_by_not",
-             detail: "profile triggers Not: material:construction_work"
+             detail: "org wholly within Not: material:asbestos material:construction_work"
            } =
              cause(result, "not")
 

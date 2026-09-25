@@ -552,6 +552,7 @@ defmodule SertantaiComplianceWeb.ScreeningController do
           applies: result.applies,
           confidence: Float.round(result.confidence, 3),
           match_reasons: result.reasons,
+          caveats: result.caveats,
           unmatched_dimensions: result.unmatched_dimensions,
           significance_rating: law.significance_rating,
           significance_score: law.significance_score,

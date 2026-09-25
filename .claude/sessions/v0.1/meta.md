@@ -25,6 +25,7 @@ they are resumed.
 | 3 | [Prod Data Unblock](./03-prod-data-unblock.md) | pending | legal#133, legal#27 | 0 | Electric shapes load in prod with current data |
 | 4a | [Profile Vocabulary & API](./04a-profile-vocabulary-api.md) | suspended | 1 | 0–1 | Corpus vocabulary, dimension mapping fix, conditions, MCP-ready Ash actions, REST + OpenAPI, QQ profile via API |
 | 4 | [Screener Benchmark Harness](./04-screener-benchmark.md) | **closed** | 4a | 0 | `mix screener.benchmark`, first QQ confusion matrix |
+| 4b | [Screener Tuning — Prefer Inclusion](./04b-screener-tuning.md) | **active** | 4 | 1 | Not/TimeWindow soft exclusion with caveats; benchmark-driven |
 | 5 | [Change Pipeline](./05-change-pipeline.md) | pending | 3 | 1 | ChangeDetector triggered, baseline checkpoint, change feed QA |
 | 6 | [Accuracy Iteration Loop](./06-accuracy-loop.md) | pending | 4 | 1–3 | Weekly benchmark, legal-side fixes, recall ≥95% |
 | 7 | [Context-First Profiler](../2026-08-15-context-first-profiler.md) | pending (stretch) | gate 10 Oct | 2–3 | Existing pending session — contextual actor vocabulary |

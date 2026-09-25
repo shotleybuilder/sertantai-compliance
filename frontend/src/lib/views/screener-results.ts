@@ -3,7 +3,7 @@
  * evaluation matches. Extracted from +page.svelte for testability.
  */
 
-import type { EvaluationMatch, ScreeningProfile } from '$lib/api/screening';
+import type { Caveat, EvaluationMatch, ScreeningProfile } from '$lib/api/screening';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -165,6 +165,15 @@ export function dimLabel(dim: string): string {
 		temporal: 'Temporal'
 	};
 	return labels[dim] || dim;
+}
+
+/** Plain-language explanation of why an included law may not apply. */
+export function caveatText(caveat: Caveat): string {
+	if (caveat.kind === 'disapplication') {
+		return `The law disapplies to ${caveat.codes.join(', ')} (${dimLabel(caveat.dimension)}). Your profile includes this, but not only this, so it's kept for you to decide.`;
+	}
+	const span = [caveat.from ?? '…', caveat.to ?? '…'].join(' to ');
+	return `The law's applicability data has a time window (${span}) that conflicts with its in-force status. Check it still applies.`;
 }
 
 export function pct(n: number): string {

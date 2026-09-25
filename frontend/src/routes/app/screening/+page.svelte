@@ -12,6 +12,7 @@
 		computeTabCounts as _computeTabCounts,
 		confidenceTier,
 		dimLabel,
+		caveatText,
 		pct,
 		profileDimensions,
 		TABS,
@@ -617,6 +618,14 @@
 													) === i
 											)}
 											<div class="flex flex-wrap gap-1 mt-1.5">
+												{#if (match.caveats ?? []).length > 0}
+													<span
+														class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-50 text-amber-700"
+														title="May not apply: check before accepting"
+													>
+														Check
+													</span>
+												{/if}
 												{#each dedupedReasons as reason}
 													<span
 														class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-gray-50 text-gray-600"
@@ -706,6 +715,22 @@
 														</div>
 													{/each}
 												</div>
+											</div>
+										{/if}
+
+										<!-- Caveats: why this included law may not apply -->
+										{#if (match.caveats ?? []).length > 0}
+											<div class="mt-3 rounded-md bg-amber-50 border border-amber-100 p-2">
+												<h4
+													class="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1"
+												>
+													Check before accepting
+												</h4>
+												<ul class="space-y-0.5">
+													{#each match.caveats ?? [] as caveat}
+														<li class="text-xs text-amber-800">{caveatText(caveat)}</li>
+													{/each}
+												</ul>
 											</div>
 										{/if}
 

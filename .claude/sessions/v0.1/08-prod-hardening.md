@@ -23,7 +23,7 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 - ✅ **npm audit**: 10 → 5 with non-breaking `npm audit fix` (js-yaml, nanoid, devalue, vitest, @vitest/mocker); Vite dev server now binds localhost by default (`VITE_DEV_HOST` to override; set in `docker-compose.dev.yml`)
 - ⏸️ **Svelte 5 / GridLite 0.10 / Vite 8 upgrade** clears the remaining 5. **Deferred until after v0.1** (user, 2026-09-25): pending session `2026-09-25-svelte5-gridlite-upgrade.md`
 - ✅ **Backups live on prod** 2026-09-25: stack `afa225d` pulled, `backup` container running (daily 02:00 UTC), both restic repos initialised, first backup (23 s) and restore drill (39 s) pass. Storage Box **automatic snapshots enabled** (daily 03:00 UTC, keep 10; 10 is the 1 TB plan's maximum). Remaining: freshness alert (monitoring item)
-- ⬜ **NAS copy** (user's home NAS pulls from the Storage Box, read-only sub-account): third copy outside Hetzner
+- ✅ **NAS copy live** 2026-09-25: office PC `bluefin` pulls the org repo onto the UGREEN DXP2800 (SMB `/mnt/nas/sertantai-data/backups/storagebox-org`) daily at 04:00 UTC via the read-only sub2 (stack `nas-pull/`). Verified 19/19 files match, decrypts, `restic check` clean
 - ✅ **IDB isolation**: already scoped per org in `pglite/client.ts` (IDB name from the JWT `org_id`; the #106 fix was ported earlier)
 - ✅ **Electric proxy cross-tenant leak (critical, fixed 2026-09-25)**: see below
 - ✅ Prod compliance **stopped** 2026-09-25 13:26 UTC (user's decision) until the fix is deployed: backend, frontend and Electric (`docker compose stop`; containers kept). Both leak paths now return 502. Prod exposure was not probed.
@@ -211,3 +211,14 @@ Legal's reference data can be re-pushed from dev. `law_change_snapshots` can be 
 - **First backup** (23 s): legal_prod 93.9 MiB, hub 23.7 KiB, compliance-tables 19.4 KiB, auth 25.1 KiB.
 - **Restore drill** (39 s): legal_prod 36 tables / ~487k rows, hub 5 / ~220, compliance-tables 10 / ~0, auth 6 / ~138. Scratch DBs dropped.
 - **Exposure (#25):** prod `org_applicabilities`, `organizations`, `org_screening_profiles` and `applicability_events` all have 0 rows, and `organization_locations` / `location_screenings` don't exist. **No org data could have leaked from prod.**
+
+### NAS pull (2026-09-25, stack `nas-pull/`, pushed)
+
+- The NAS is the office UGREEN DXP2800 (per legal's `nas-data-sync` skill), SMB-mounted on this PC. There's no direct NAS access and UGOS Docker would need its UI, so **the office PC runs the pull** (systemd user timer, `Persistent=true`), not the NAS.
+- Key `~/.ssh/storagebox_nas` (PC); public key written to `/sertantai/repo/.ssh/authorized_keys` via sub1. From the PC (outside Hetzner): sub2 lists the repo, **writes fail** (read-only), and the host key fingerprint matches the server's pinned one.
+- `restic check` on the org repo with `.ssh/` inside it: no errors (restic ignores the dir).
+- rclone gotcha: `knownhosts: key mismatch` until `host_key_algorithms=ssh-ed25519`; only the verified ed25519 key is pinned.
+- rclone gotcha: empty dirs aren't copied by default, so the NAS copy lacked `locks/`. Added `--create-empty-src-dirs`.
+- Deletions guarded: `--backup-dir` dated (90 days) and `--max-delete 200`, so a wiped box can't wipe the NAS.
+- **Verified:** first pull 18 s; `rclone check` 19/19 match; NAS copy decrypts with the org password (3 snapshots) and `restic check` is clean. Private repo (credentials) is not on the NAS.
+- Linger is off, so the timer runs only while the user is logged in; `Persistent` catches up missed runs.

@@ -26,7 +26,7 @@ The evaluator excludes a whole law when a single profile fact matches a `Not` (d
 - ✅ Screening UI: show caveats on law cards (amber "Check" badge; "Check before accepting" section with a plain-language explanation)
 - ✅ Benchmark: attribute caveated matches (`soft_disapplication`, `time_window_caveat`) and re-run QQ as_found and reviewed; compare with the baseline
 - ✅ Tests for categorical vs soft exclusion, territorial coverage, caveat passthrough (backend 71, frontend 134)
-- ⬜ Post before/after to sertantai-legal#161 (Not extraction still needs fixing at source)
+- ✅ Posted before/after to sertantai-legal#161 (https://github.com/shotleybuilder/sertantai-legal/issues/161#issuecomment-5831178348); Not/TimeWindow extraction still needs fixing at source
 
 ## Dependencies
 

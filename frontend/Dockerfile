@@ -1,17 +1,16 @@
 ################################################################################
 # Builder Stage
 ################################################################################
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (.npmrc sets legacy-peer-deps for the gridlite adapter
+# peer range mismatch)
+COPY package.json package-lock.json .npmrc ./
 
-# Install all dependencies (including devDependencies for build)
-# Using npm install instead of npm ci for cross-npm-version lockfile compatibility
-# --legacy-peer-deps needed for gridlite adapter peer dependency mismatch
-RUN npm install --legacy-peer-deps
+# Reproducible install from the committed lockfile (incl. devDependencies for build)
+RUN npm ci
 
 # Copy application code
 COPY . .
@@ -22,7 +21,7 @@ RUN npm run build
 ################################################################################
 # Runner Stage
 ################################################################################
-FROM node:22-alpine
+FROM node:26-alpine
 
 # Install production dependencies for serving
 RUN npm install -g serve@14

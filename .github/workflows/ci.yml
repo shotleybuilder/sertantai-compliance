@@ -10,7 +10,7 @@ env:
   MIX_ENV: test
   ELIXIR_VERSION: '1.20.4'
   OTP_VERSION: '29.1.1'
-  NODE_VERSION: '22.x'  # match frontend/Dockerfile
+  NODE_VERSION: '26.x'  # match frontend/Dockerfile
 
 jobs:
   backend-checks:

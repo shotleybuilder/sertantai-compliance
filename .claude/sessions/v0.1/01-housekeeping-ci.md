@@ -30,6 +30,7 @@ Nothing in v0.1 can be trusted while CI is red, and there is loose state left ov
 - ✅ Align hooks and CI: security steps made blocking with the same config; dead `usage_rules.check` step removed
 - ✅ Upgrade Ash 3.27.7 → 3.33.11 (security advisory) + ash-functions v6 migration
 - ✅ Migrate to Elixir 1.20.4 / OTP 29.1.1 (local, CI, Docker, `.tool-versions`)
+- ✅ Migrate frontend to Node 26 (Docker, CI, `.tool-versions`); Docker build uses `npm ci`
 - ⬜ All workflows green on `main` (push blocked: gh token needs `workflow` scope)
 
 ## Dependencies
@@ -69,6 +70,13 @@ The OS upgrade moved local to Elixir 1.20.4 / OTP 29.1.1, so the project was mig
 - **Docker**: builder `elixir:1.20.4-otp-29-alpine`, which is Alpine 3.24.2, so runtime moved `alpine:3.23` → `3.24` (shared OpenSSL/ncurses). Added `lksctp-tools`, because OTP 29 tries to load `libsctp` at boot and logs an error without it.
 - **Verified**: the image builds. The container ran against the dev DB: migrations "already up", `/health` ok in 3s, `/health/detailed` reports OTP 29 / Elixir 1.20.4 / DB healthy, Docker HEALTHCHECK healthy, OpenSSL 3.5.8, `:ssl` starts.
 - **pre-push hook**: Dialyzer is now **blocking** (same as CI). A stale PLT ("Old PLT file") fails with a rebuild hint instead of being skipped silently, which is how the stale PLT went unnoticed on 2026-09-25.
+
+### Node 26 migration
+
+- Local was already Node 26.10.0 / npm 11.19.1. Lint, svelte-check, 132 tests and the build had all run on it earlier in this session.
+- `frontend/Dockerfile`: `node:22-alpine` → `node:26-alpine` (both stages). The install is now `npm ci` from the committed lockfile, with `.npmrc` copied in, instead of `npm install --legacy-peer-deps`. Builds are reproducible, which the release plan needs.
+- `ci.yml` `NODE_VERSION: 26.x`; `.tool-versions` `nodejs 26.10.0`.
+- Verified: the image builds, `/` and the SPA deep link `/app/screening` return 200, the container reports v26.10.0, and HEALTHCHECK is healthy.
 
 ### Moved to other sessions
 

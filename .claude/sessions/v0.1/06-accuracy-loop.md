@@ -3,7 +3,7 @@ session: "v0.1-06: Accuracy Iteration Loop"
 status: pending
 opened: 2026-09-25
 parent: v0.1/meta.md
-depends_on: ["v0.1/04-screener-benchmark"]
+depends_on: ["v0.1/04-screener-benchmark", "v0.1/04b-screener-tuning", "sertantai-legal#161"]
 
 summary: >
   Weekly loop: run the benchmark, rank causes, fix data (mostly in
@@ -15,6 +15,16 @@ summary: >
 # Session: Accuracy Iteration Loop (PENDING)
 
 Keep this loose. The benchmark results decide the order of work.
+
+## Blocked on sertantai-legal data (2026-09-25)
+
+Compliance-side tuning is done for now (04: benchmark; 04b: prefer-inclusion semantics, QQ reviewed agreement 68.2%). **Further tuning is blocked on legal data improvements** tracked in sertantai-legal#161:
+- Making classification (163 register laws never screened)
+- tree coverage (74 QQ laws; 83% of Making laws corpus-wide)
+- territory-only branches (54 over-matches)
+- Not and TimeWindow extraction (caveat noise)
+
+Resume this loop as those fixes land. Re-run `mix screener.benchmark` (it reports deltas) and tune from the ranked causes.
 
 ## Loop (weekly checkpoints: ~3 Oct baseline, 10 Oct, 17 Oct)
 

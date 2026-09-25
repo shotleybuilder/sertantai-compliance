@@ -1,12 +1,81 @@
 ---
 session: "v0.1-04b: Screener Tuning — Prefer Inclusion"
-status: active
+status: closed
 opened: 2026-09-25
+closed: 2026-09-25
+outcome: success
 parent: v0.1/meta.md
-depends_on: ["v0.1/04-screener-benchmark"]
+
+summary: >
+  The screener now prefers inclusion. A matching Not (disapplies) excludes a
+  law only when the org is wholly within it; otherwise the law is included at
+  confidence 0.6 with a caveat for human review. Out-of-window TimeWindows are
+  handled the same way. QQ reviewed-profile evaluable agreement went from 45.1%
+  to 68.2%, and disapplied_by_not from 79 to 0. Further tuning is blocked on
+  sertantai-legal data improvements (#161).
+
+decisions:
+  - what: Prefer inclusion; only categorical facts exclude
+    why: User. A human sense-checks the screener's register and can disapply a law, but a wrongly excluded law is never seen. Excluding on one profile condition is too strict.
+    result: Categorical means revoked in full (corpus filter) or wholly within a disapplication. Everything else is included with a caveat.
+  - what: Test "wholly within" per dimension, using the territorial hierarchy
+    why: A multi-activity org shouldn't lose a law because one of its facts is excluded; a Scotland-only org should lose a law that doesn't apply to GB
+    result: wholly_excluded?/2 in ApplicabilityEvaluator, shared with the benchmark so attribution matches evaluation
+  - what: Caveat factor 0.6
+    why: Keeps caveated laws out of the strong tier so they rank lower for review
+    result: All 135 caveated QQ matches are probable, none strong
+  - what: Trust legal's live status over tree TimeWindows
+    why: The corpus holds only laws legal marks in force, and 50 trees have bogus past end dates
+    result: Out-of-window laws are included with a time_window caveat
+  - what: Caveats are separate from match reasons in the API and UI
+    why: A disapplication shown as a match badge would mislead the reviewer
+    result: `caveats` field; amber Check badge and a plain-language "Check before accepting" section on screening cards
+  - what: Close rather than keep tuning
+    why: User. Further tuning needs better data from sertantai-legal (Making classification, tree coverage, territory-only branches, Not/TimeWindow extraction), so it's blocked on legal#161
+    result: Tuning continues in the v0.1-06 accuracy loop once legal fixes land; the benchmark measures each change
+
+metrics:
+  qq_reviewed: { evaluable_agreement_before: 0.451, evaluable_agreement_after: 0.682, both_before: 173, both_after: 262, screener_only_before: 126, screener_only_after: 172, disapplied_by_not_before: 79, disapplied_by_not_after: 0 }
+  qq_as_found: { evaluable_agreement_before: 0.430, evaluable_agreement_after: 0.534 }
+  caveated_matches: { total: 135, in_register: 89, new_for_review: 46, soft_disapplication: 34, time_window: 11, tier: probable }
+  tests: { backend: 71, frontend: 134 }
+
+lessons:
+  - title: "Inclusion-preferring semantics reward accurate profiles"
+    detail: "Under strict Not, a richer, truer profile lost more laws (23 → 79 disapplied). With 'wholly within' semantics the reviewed profile beats the as-found one by 15 points (68.2% vs 53.4%). The evaluator's semantics decide whether better input helps or hurts."
+    tag: data
+  - title: "What-if attribution must check categorical exclusions first"
+    detail: "Adding generic codes in a what-if took the org out of 'wholly within' a Not, so a categorical exclusion was mislabelled as generic_code_gate. Attribution now checks excluding disapplications first, using the evaluator's own wholly_excluded?/2."
+    tag: data
+  - title: "Don't edit the working tree while pre-push hooks run"
+    detail: "The pre-push hook ran the backend tests against files being edited at the same moment and rejected the push. Nothing was pushed. Run pushes in the foreground, or wait for them to finish before editing."
+    tag: tooling
+  - title: "Benchmark run directories need a time, not just a date"
+    detail: "The <date>-<label> naming meant a same-day re-run overwrote the committed baseline. It was restored from git; runs are now <YYYY-MM-DDTHHMM>-<label>."
+    tag: tooling
+
+artifacts:
+  - backend/lib/sertantai_compliance/fitness/applicability_evaluator.ex
+  - backend/lib/sertantai_compliance/fitness/screener.ex
+  - backend/lib/sertantai_compliance/fitness/benchmark.ex
+  - backend/lib/mix/tasks/screener.benchmark.ex
+  - backend/lib/sertantai_compliance_web/controllers/screening_controller.ex
+  - backend/test/sertantai_compliance/fitness/applicability_evaluator_test.exs
+  - backend/test/sertantai_compliance/fitness/benchmark_test.exs
+  - backend/priv/benchmarks/qq/runs/2026-09-25T1047-as_found/
+  - backend/priv/benchmarks/qq/runs/2026-09-25T1047-reviewed/
+  - frontend/src/lib/api/screening.ts
+  - frontend/src/lib/views/screener-results.ts
+  - frontend/src/routes/app/screening/+page.svelte
+
+depends_on:
+  - v0.1/04-screener-benchmark.md
+
+enables:
+  - "v0.1-06 accuracy loop: further tuning once sertantai-legal#161 data fixes land"
 ---
 
-# Session: Screener Tuning — Prefer Inclusion (ACTIVE)
+# Session: Screener Tuning — Prefer Inclusion (CLOSED)
 
 ## Problem
 

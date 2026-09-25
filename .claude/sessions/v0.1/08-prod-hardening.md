@@ -163,3 +163,18 @@ Legal's reference data can be re-pushed from dev. `law_change_snapshots` can be 
 - Confirm daily RPO for v0.1.
 - Whether QQ-specific tables go to the NAS.
 - The Storage Box hostname (`uXXXXX.your-storagebox.de`) and sub-account usernames. **No passwords in chat**; keys and the restic password are generated on the server.
+
+### Storage Box setup progress (2026-09-25)
+
+- Host `u676867.your-storagebox.de`. Sub-accounts `u676867-sub1` and `u676867-sub2` created by the user (`backup` read-write and `nas` read-only; mapping to confirm). Both are reachable from sertantai-hz on port 23 (auth refused without a key, as expected).
+- **Layout** (keys live in each sub-account's base dir, so the two must not share one):
+  - `backup` base `/sertantai`, key in `/sertantai/.ssh/authorized_keys`;
+  - restic repo at `/sertantai/repo`;
+  - `nas` base `/sertantai/repo` (read-only), key in `/sertantai/repo/.ssh/authorized_keys`, written via `backup`, since a read-only account can't install its own key.
+- restic isn't installed on the host. Plan: run backups as a **container in sertantai-stack** (pg_dump + restic on a schedule), version-controlled, with no hand changes on the server.
+- Next steps:
+  1. Generate a dedicated ed25519 key on the server (`~/.ssh/storagebox_backup`, no passphrase for cron).
+  2. The user installs it once with the sub-account password (`install-ssh-key`).
+  3. Write the backup container in sertantai-stack (local commit for review).
+  4. `restic init`, first backup, restore test.
+  5. NAS key and pull job.

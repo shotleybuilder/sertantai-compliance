@@ -183,3 +183,21 @@ Legal's reference data can be re-pushed from dev. `law_change_snapshots` can be 
   - Key `~/.ssh/storagebox_backup` generated on sertantai-hz (fingerprint `SHA256:xEU35IhU…6dz0`), installed by the user via `install-ssh-key`.
   - Key-only SFTP from the server verified.
   - `/sertantai/repo` exists (created by the panel with sub2). From sub1 the chroot shows it as `/home/repo`, so the restic repo is `sftp:…:repo` (relative).
+
+### Backup service written (sertantai-stack `afa225d`, local commit, for review)
+
+- `docker/backup/`: Dockerfile (restic 0.19.1 + `postgresql${PG_MAJOR:-16}-client`, crond), `backup.sh`, `restore-test.sh`, `crontab` (02:00 daily, 03:30 on the 1st), `ssh_config` + pinned `known_hosts`, `README.md` runbook. Compose `backup` service with an `infra_network`-only compose secret `storagebox_key`, `backup_status` volume, and restic passwords from `.env` (`:?` required).
+- The two-repo split follows a column audit of the prod DBs:
+  - `sertantai_legal_prod` has no credentials; its only personal data is the decision-maker email in the audit trail;
+  - `sertantai_auth_prod` has all the credentials (hashed passwords, TOTP secrets and backup codes, OAuth and session tokens);
+  - `sertantai_hub_prod` has neither.
+
+  → org repo (NAS-mirrored): legal_prod, hub_prod and compliance-tables. Private repo: auth_prod.
+- **Tested locally** against dev PG 17 (image built with `PG_MAJOR=17`), with local repos:
+  - backups and retention;
+  - repo isolation (the org password fails on the private repo);
+  - a failed pg_dump (version mismatch) → **no snapshot and no last_success** (the `--stdin-from-command` safety property);
+  - the restore drill across all snapshots;
+  - an exact compliance-tables restore (QQ register 711, profiles 2, snapshots 3774, identical to live);
+  - scratch DBs cleaned up.
+- Not yet done on the server: `.env` passwords, `restic init`, first backup, first drill, box snapshots, NAS key and pull.

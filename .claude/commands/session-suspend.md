@@ -77,3 +77,4 @@ Resume with `/session-start <session>`. It sets `status: active` and `(ACTIVE)` 
 - Same quality bar as `/session-close`: lessons are the most valuable part. Capture what would save time next time, not a changelog.
 - Don't invent lessons. A short suspension may have few or none.
 - The summary must make it obvious to someone resuming cold what is left and why the session was paused.
+- **Quote YAML values that start with a special character** (`` ` ``, `@`, `*`, `&`, `!`, `%`, `|`, `>`, `[`, `{`) or contain `: `. Unquoted, they break parsing, and the session silently drops out of the index. After rebuilding the index, check its output for `WARN: YAML parse error`.

@@ -71,3 +71,4 @@ enables:
 - **Don't invent lessons.** Only capture what actually happened in the session. If there were no surprises, fewer lessons is fine.
 - **Keep summary under 3 sentences.** The detail is in the sections below.
 - **Decisions need a `why`.** "We chose shared DB" is incomplete. "We chose shared DB because compliance reads legal's foundational tables and creating a separate DB would require a data migration pipeline" is useful.
+- **Quote YAML values that start with a special character** (`` ` ``, `@`, `*`, `&`, `!`, `%`, `|`, `>`, `[`, `{`) or contain `: `. Unquoted, they break parsing, and the session silently drops out of the index. After rebuilding the index, check its output for `WARN: YAML parse error`.

@@ -24,7 +24,7 @@ Taken together, QQ's profile barely touches the trees.
 - ✅ Corpus-derived vocabulary (`Fitness.Vocabulary`: 727 codes, cached 10 min; normalise/lookup/suggest/route). Still to do for the API: definitions + field grouping in `GET /vocabulary`. codes per evaluator dimension (from compiled trees), with law counts, definitions where available, and the profile field → dimension mapping
 - ✅ Fix the dimension mapping (`profile_from_screening/2` routes via vocabulary + strips actor prefixes) so profile fields reach the dimension the trees use (e.g. premises/ship/aircraft are `territorial` in trees but `locations` → `material` in the profile)
 - ✅ Persist conditional answers: `conditions` field + idempotent migration (`20260925095810`), routed to `conditional`
-- ⬜ Wire the wizard's unbound conditional-question checkboxes to `conditions`
+- ✅ Wire the wizard's conditional-question checkboxes to `conditions` (saved via PATCH)
 - ✅ Ash actions as the API foundation (MCP-ready for `ash_ai` in v0.2): `:upsert` (replace), `:patch`, generic `:vocabulary` and `:check` actions with AI-oriented descriptions; `Fitness.ProfileCheck`
 - ✅ REST: `PUT /profile` (replace, all fields), `PATCH /profile`, `POST /profile/check`, `GET /vocabulary` + `about`/`fields`/`dimensions`; unknown values stored with `warnings`, `?strict=true` rejects (422); wizard saves via PATCH so API-only fields survive
 - ⬜ OpenAPI spec for the profile + evaluate endpoints

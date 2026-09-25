@@ -169,6 +169,13 @@
 		openSubGroups = openSubGroups;
 	}
 
+	function toggleCondition(code: string) {
+		const current = profile.conditions || [];
+		profile.conditions = current.includes(code)
+			? current.filter((c) => c !== code)
+			: [...current, code];
+	}
+
 	function lookupDefinition(profileKey: string, tag: string) {
 		// Actor steps use actor label prefixes; fitness steps use snake_case
 		if (profileKey === 'governed_actors' || profileKey === 'government_actors') {
@@ -187,7 +194,8 @@
 		processes: [],
 		sector: [],
 		certifications: [],
-		contract_requirements: []
+		contract_requirements: [],
+		conditions: []
 	};
 
 	let vocabulary: Vocabulary = {
@@ -529,7 +537,8 @@
 					processes: profileData.processes || [],
 					sector: profileData.sector || [],
 					certifications: profileData.certifications || [],
-					contract_requirements: profileData.contract_requirements || []
+					contract_requirements: profileData.contract_requirements || [],
+					conditions: profileData.conditions || []
 				};
 				selectedOrgType = deriveOrgType();
 			}
@@ -1108,6 +1117,8 @@
 										<input
 											type="checkbox"
 											class="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+											checked={(profile.conditions || []).includes(q.code)}
+											on:change={() => toggleCondition(q.code)}
 										/>
 										<div>
 											<span class="text-sm text-gray-700">{q.text}</span>

@@ -29,7 +29,7 @@ decisions:
     result: Out-of-window laws are included with a time_window caveat
   - what: Caveats are separate from match reasons in the API and UI
     why: A disapplication shown as a match badge would mislead the reviewer
-    result: `caveats` field; amber Check badge and a plain-language "Check before accepting" section on screening cards
+    result: "caveats field; amber Check badge and a plain-language Check-before-accepting section on screening cards"
   - what: Close rather than keep tuning
     why: User. Further tuning needs better data from sertantai-legal (Making classification, tree coverage, territory-only branches, Not/TimeWindow extraction), so it's blocked on legal#161
     result: Tuning continues in the v0.1-06 accuracy loop once legal fixes land; the benchmark measures each change

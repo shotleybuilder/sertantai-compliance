@@ -69,3 +69,18 @@ Bugs found on the way:
 - `in_corpus` was NULL for register-only laws with no `is_making` or `country`, so `and` raised BadBooleanError. Fixed with a coalesce in SQL and `== true` on load.
 - `ApplicabilityEvent.status_after` is required: "yes"/"yes" for register laws, nil/"unreviewed" for new laws.
 - **Oban was a dependency but never started**, and there was no `oban_jobs` table. The existing Baserow sync workers could never have run either.
+
+## Jurisdiction exclusion (found in the browser check, 2026-09-25)
+
+The first "new law" in QQ's feed was *Gas Safety (Management) Regulations (Northern Ireland)* (`UK_nisr_1997_195`), a false positive: QQ has no NI sites. Two legal data faults combine:
+- `geo_extent = UK` and `geo_region` lists all four nations for an NI Statutory Rule. 16 `nisr` laws have `geo_extent = UK`.
+- The tree is `(licence AND northern_ireland) OR premises`, so a place type satisfies it (the "territory branch" over-match).
+
+40 of QQ's screener matches were NI-made laws (22 strong), all screener-only.
+
+**Fix (user-approved): categorical jurisdiction exclusion** in `Fitness.Screener` via `Fitness.Jurisdiction`.
+- Devolved legislation, identified by type code (NI: nisr, nisi, nisro, apni, nia, mnia; Scotland: asp, ssi, sdsi; Wales: asc, anaw, mwa, wsi), is excluded when the org's jurisdictions don't include that nation, directly or via a parent (UK, GB, E+W).
+- Place types are ignored, and an org with no jurisdiction set is never excluded.
+- This applies to the API, the benchmark (`outside_jurisdiction` cause) and change detection alike.
+
+QQ reviewed benchmark: screener_only 172 → **132** (−40), both unchanged at 262, evaluable agreement 68.4%. Tests: backend 88.

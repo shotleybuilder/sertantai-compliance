@@ -1,0 +1,474 @@
+{
+  "meta": {
+    "label": "reviewed",
+    "name": "qq",
+    "reference": "priv/benchmarks/qq/legacy_register.csv",
+    "org": "c075d56b-8420-4408-b695-ccfbc1ba15ec",
+    "profile_source": "priv/benchmarks/qq/profile_reviewed.json",
+    "run_at": "2026-09-25T11:35:19Z"
+  },
+  "agreement": {
+    "agree_no": 18,
+    "both": 262,
+    "register_only": 389,
+    "screener_only": 132
+  },
+  "causes": [
+    {
+      "cause": "not_making",
+      "agreement": "register_only",
+      "side": "classification",
+      "laws": 163
+    },
+    {
+      "cause": "revoked",
+      "agreement": "register_only",
+      "side": "register",
+      "laws": 104
+    },
+    {
+      "cause": "no_tree",
+      "agreement": "register_only",
+      "side": "tree",
+      "laws": 73
+    },
+    {
+      "cause": "register_gap_or_overmatch",
+      "agreement": "screener_only",
+      "side": "unknown",
+      "laws": 42
+    },
+    {
+      "cause": "territory_branch_match",
+      "agreement": "screener_only",
+      "side": "tree",
+      "laws": 35
+    },
+    {
+      "cause": "soft_disapplication",
+      "agreement": "screener_only",
+      "side": "tree",
+      "laws": 23
+    },
+    {
+      "cause": "generic_code_gate",
+      "agreement": "register_only",
+      "side": "tree",
+      "laws": 21
+    },
+    {
+      "cause": "territory_only_tree",
+      "agreement": "screener_only",
+      "side": "tree",
+      "laws": 15
+    },
+    {
+      "cause": "material_condition_miss",
+      "agreement": "register_only",
+      "side": "profile_or_tree",
+      "laws": 10
+    },
+    {
+      "cause": "time_window_caveat",
+      "agreement": "screener_only",
+      "side": "tree",
+      "laws": 9
+    },
+    {
+      "cause": "construction_misfire",
+      "agreement": "register_only",
+      "side": "tree",
+      "laws": 8
+    },
+    {
+      "cause": "register_says_no",
+      "agreement": "screener_only",
+      "side": "screener",
+      "laws": 8
+    },
+    {
+      "cause": "gov_actor_gate",
+      "agreement": "register_only",
+      "side": "tree",
+      "laws": 5
+    },
+    {
+      "cause": "territorial_condition_miss",
+      "agreement": "register_only",
+      "side": "profile_or_tree",
+      "laws": 3
+    },
+    {
+      "cause": "multi_condition_miss",
+      "agreement": "register_only",
+      "side": "profile_or_tree",
+      "laws": 1
+    },
+    {
+      "cause": "outside_jurisdiction",
+      "agreement": "register_only",
+      "side": "register",
+      "laws": 1
+    }
+  ],
+  "families": [
+    {
+      "both": 45,
+      "key": "💙 OH&S: Occupational / Personal Safety",
+      "register_only": 40,
+      "screener_only": 4
+    },
+    {
+      "both": 16,
+      "key": "💚 WASTE",
+      "register_only": 42,
+      "screener_only": 5
+    },
+    {
+      "both": 28,
+      "key": "💚 ENVIRONMENTAL PROTECTION",
+      "register_only": 22,
+      "screener_only": 7
+    },
+    {
+      "both": 8,
+      "key": "(none)",
+      "register_only": 42,
+      "screener_only": 0
+    },
+    {
+      "both": 13,
+      "key": "💚 WATER & WASTEWATER",
+      "register_only": 17,
+      "screener_only": 15
+    },
+    {
+      "both": 3,
+      "key": "💚 CLIMATE CHANGE",
+      "register_only": 25,
+      "screener_only": 16
+    },
+    {
+      "both": 10,
+      "key": "💚 TOWN & COUNTRY PLANNING",
+      "register_only": 14,
+      "screener_only": 6
+    },
+    {
+      "both": 9,
+      "key": "💙 TRANSPORT: Road Safety",
+      "register_only": 17,
+      "screener_only": 2
+    },
+    {
+      "both": 15,
+      "key": "💙 PUBLIC: Consumer / Product Safety",
+      "register_only": 5,
+      "screener_only": 7
+    },
+    {
+      "both": 9,
+      "key": "💚 WILDLIFE & COUNTRYSIDE",
+      "register_only": 10,
+      "screener_only": 8
+    },
+    {
+      "both": 7,
+      "key": "💚 POLLUTION",
+      "register_only": 15,
+      "screener_only": 4
+    },
+    {
+      "both": 10,
+      "key": "💙 FIRE: Dangerous and Explosive Substances",
+      "register_only": 13,
+      "screener_only": 2
+    },
+    {
+      "both": 6,
+      "key": "💚 NUCLEAR & RADIOLOGICAL",
+      "register_only": 9,
+      "screener_only": 5
+    },
+    {
+      "both": 6,
+      "key": "💚 AIR QUALITY",
+      "register_only": 13,
+      "screener_only": 1
+    },
+    {
+      "both": 5,
+      "key": "💚 ENERGY",
+      "register_only": 4,
+      "screener_only": 9
+    },
+    {
+      "both": 1,
+      "key": "💙 TRANSPORT: Maritime Safety",
+      "register_only": 15,
+      "screener_only": 2
+    },
+    {
+      "both": 10,
+      "key": "💜 HR: Employment",
+      "register_only": 6,
+      "screener_only": 1
+    },
+    {
+      "both": 9,
+      "key": "💙 PUBLIC: Building Safety",
+      "register_only": 6,
+      "screener_only": 0
+    },
+    {
+      "both": 6,
+      "key": "💙 HEALTH: Public",
+      "register_only": 8,
+      "screener_only": 0
+    },
+    {
+      "both": 3,
+      "key": "💚 PLANNING & INFRASTRUCTURE",
+      "register_only": 3,
+      "screener_only": 8
+    },
+    {
+      "both": 7,
+      "key": "💙 FIRE",
+      "register_only": 5,
+      "screener_only": 0
+    },
+    {
+      "both": 1,
+      "key": "💙 PUBLIC",
+      "register_only": 10,
+      "screener_only": 0
+    },
+    {
+      "both": 2,
+      "key": "💚 FISHERIES & FISHING",
+      "register_only": 1,
+      "screener_only": 7
+    },
+    {
+      "both": 5,
+      "key": "💚 MARINE & RIVERINE",
+      "register_only": 2,
+      "screener_only": 3
+    },
+    {
+      "both": 2,
+      "key": "💙 TRANSPORT: Air Safety",
+      "register_only": 7,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "💙 OH&S: Offshore Safety",
+      "register_only": 0,
+      "screener_only": 9
+    },
+    {
+      "both": 2,
+      "key": "💙 FOOD",
+      "register_only": 5,
+      "screener_only": 0
+    },
+    {
+      "both": 4,
+      "key": "💙 OH&S: Gas & Electrical Safety",
+      "register_only": 2,
+      "screener_only": 1
+    },
+    {
+      "both": 4,
+      "key": "💙 HEALTH: Drug & Medicine Safety",
+      "register_only": 1,
+      "screener_only": 1
+    },
+    {
+      "both": 3,
+      "key": "💚 PLANT HEALTH",
+      "register_only": 2,
+      "screener_only": 0
+    },
+    {
+      "both": 2,
+      "key": "💜 HR: Insurance / Compensation / Wages / Benefits",
+      "register_only": 3,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "💙 PUBLIC: Data",
+      "register_only": 4,
+      "screener_only": 1
+    },
+    {
+      "both": 0,
+      "key": "💚 TREES: Forestry & Timber",
+      "register_only": 3,
+      "screener_only": 1
+    },
+    {
+      "both": 2,
+      "key": "💚 AGRICULTURE: Pesticides",
+      "register_only": 2,
+      "screener_only": 0
+    },
+    {
+      "both": 1,
+      "key": "💜 HR: Working Time",
+      "register_only": 3,
+      "screener_only": 0
+    },
+    {
+      "both": 2,
+      "key": "💚 BUILDINGS",
+      "register_only": 1,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "💚 OIL & GAS - OFFSHORE - PETROLEUM",
+      "register_only": 0,
+      "screener_only": 3
+    },
+    {
+      "both": 0,
+      "key": "💙 HEALTH: Coronavirus",
+      "register_only": 3,
+      "screener_only": 0
+    },
+    {
+      "both": 1,
+      "key": "💚 AGRICULTURE",
+      "register_only": 2,
+      "screener_only": 0
+    },
+    {
+      "both": 1,
+      "key": "💙 TRANSPORT: Rail Safety",
+      "register_only": 2,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "💚 ANIMALS & ANIMAL HEALTH",
+      "register_only": 1,
+      "screener_only": 1
+    },
+    {
+      "both": 1,
+      "key": "💚 NOISE",
+      "register_only": 1,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "💚 TRANSPORT: Harbours & Shipping",
+      "register_only": 2,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "💙 OH&S: Mines & Quarries",
+      "register_only": 0,
+      "screener_only": 2
+    },
+    {
+      "both": 2,
+      "key": "💚 TRANSPORT: Roads & Vehicles",
+      "register_only": 0,
+      "screener_only": 0
+    },
+    {
+      "both": 1,
+      "key": "💚 GMOs",
+      "register_only": 0,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "💚 HISTORIC ENVIRONMENT",
+      "register_only": 1,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "💚 TRANSPORT: Aviation",
+      "register_only": 0,
+      "screener_only": 1
+    }
+  ],
+  "evaluable_agreement_rate": 0.684,
+  "corpus": {
+    "applies": 394,
+    "laws": 3250,
+    "with_trees": 546
+  },
+  "jurisdictions": [
+    {
+      "both": 154,
+      "key": "UK",
+      "register_only": 270,
+      "screener_only": 94
+    },
+    {
+      "both": 49,
+      "key": "GB",
+      "register_only": 24,
+      "screener_only": 13
+    },
+    {
+      "both": 34,
+      "key": "E+W",
+      "register_only": 28,
+      "screener_only": 20
+    },
+    {
+      "both": 21,
+      "key": "S",
+      "register_only": 41,
+      "screener_only": 5
+    },
+    {
+      "both": 3,
+      "key": "(none)",
+      "register_only": 24,
+      "screener_only": 0
+    },
+    {
+      "both": 1,
+      "key": "E+W+NI",
+      "register_only": 0,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "NI",
+      "register_only": 1,
+      "screener_only": 0
+    },
+    {
+      "both": 0,
+      "key": "W",
+      "register_only": 1,
+      "screener_only": 0
+    }
+  ],
+  "tiers": {
+    "possible": {
+      "applies": 2,
+      "in_register": 0
+    },
+    "probable": {
+      "applies": 144,
+      "in_register": 97
+    },
+    "strong": {
+      "applies": 248,
+      "in_register": 165
+    }
+  }
+}

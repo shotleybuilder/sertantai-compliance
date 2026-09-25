@@ -11,7 +11,7 @@ defmodule SertantaiCompliance.Fitness.Screener do
   report coverage.
   """
 
-  alias SertantaiCompliance.Fitness.ApplicabilityEvaluator
+  alias SertantaiCompliance.Fitness.{ApplicabilityEvaluator, Jurisdiction}
   alias SertantaiCompliance.Repo
 
   @type law :: %{
@@ -36,7 +36,8 @@ defmodule SertantaiCompliance.Fitness.Screener do
           confidence: float(),
           reasons: [ApplicabilityEvaluator.reason()],
           caveats: [ApplicabilityEvaluator.caveat()],
-          unmatched_dimensions: [String.t()]
+          unmatched_dimensions: [String.t()],
+          excluded: String.t() | nil
         }
 
   @corpus_sql """
@@ -93,23 +94,45 @@ defmodule SertantaiCompliance.Fitness.Screener do
   Screen `laws` (default: the whole corpus) against an evaluator `profile`
   (see `ApplicabilityEvaluator.profile_from_screening/2`). Returns one result
   per law, in corpus order.
+
+  Devolved legislation for a nation the org doesn't operate in is excluded
+  categorically (`excluded: "jurisdiction:<nation>"`), whatever its tree
+  says; see `Fitness.Jurisdiction`.
   """
   @spec screen(ApplicabilityEvaluator.profile(), [law()] | nil) :: [screened()]
   def screen(profile, laws \\ nil) do
     laws = laws || corpus()
     by_name = Map.new(laws, &{&1.name, &1})
 
+    territorial = Map.get(profile, "territorial", [])
+
     laws
     |> ApplicabilityEvaluator.evaluate_batch_with_reasons(profile)
     |> Enum.map(fn result ->
-      %{
+      screened = %{
         law: Map.fetch!(by_name, result.name),
         applies: result.applies,
         confidence: result.confidence,
         reasons: result.reasons,
         caveats: result.caveats,
-        unmatched_dimensions: result.unmatched_dimensions
+        unmatched_dimensions: result.unmatched_dimensions,
+        excluded: nil
       }
+
+      case Jurisdiction.excluded_nation(result.name, territorial) do
+        nil ->
+          screened
+
+        nation ->
+          %{
+            screened
+            | applies: false,
+              confidence: 0.0,
+              reasons: [],
+              caveats: [],
+              excluded: "jurisdiction:#{nation}"
+          }
+      end
     end)
   end
 

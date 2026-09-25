@@ -151,6 +151,9 @@ defmodule SertantaiCompliance.Fitness.Benchmark do
       s.applies ->
         Tuple.insert_at(screener_only_cause(s), 0, "screener_only")
 
+      register == "yes" and s.excluded != nil ->
+        {"register_only", "register", "outside_jurisdiction", s.excluded}
+
       register == "yes" ->
         Tuple.insert_at(register_only_cause(s.law, profile), 0, "register_only")
 

@@ -9,7 +9,8 @@
 #   ./scripts/deployment/push-backend.sh [tag]
 #
 # Arguments:
-#   tag - Optional image tag (default: latest)
+#   tag - Optional image tag (default: the release version in backend/mix.exs;
+#         'latest' is refused). The image is also tagged sha-<short commit>.
 #
 # Prerequisites:
 #   - Docker image built: ./scripts/deployment/build-backend.sh
@@ -30,7 +31,10 @@ NC='\033[0m' # No Color
 
 # Image configuration (update with your GitHub org/user)
 IMAGE_NAME="ghcr.io/shotleybuilder/sertantai-compliance-backend"
-IMAGE_TAG="${1:-latest}"
+source "$(dirname "$(readlink -f "$0")")/lib/version.sh"
+IMAGE_TAG="${1:-$(release_version)}" || exit 1
+check_image_tag "$IMAGE_TAG" || exit 1
+SHA_TAG="$(sha_tag)"
 FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -70,6 +74,10 @@ echo -e "${BLUE}Pushing to GitHub Container Registry...${NC}"
 echo ""
 
 docker push "${FULL_IMAGE}"
+# The commit tag, if this image was built from the current commit
+if docker image inspect "${IMAGE_NAME}:${SHA_TAG}" > /dev/null 2>&1; then
+    docker push "${IMAGE_NAME}:${SHA_TAG}"
+fi
 
 # Check push success
 if [ $? -eq 0 ]; then

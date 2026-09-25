@@ -118,6 +118,13 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Check release versions match
+        # mix.exs and package.json are bumped together by scripts/release.sh
+        run: |
+          source scripts/deployment/lib/version.sh
+          version="$(release_version)"  # an assignment fails the step on mismatch
+          echo "Release version: $version"
+
       - name: Install dependencies
         working-directory: frontend
         run: npm ci

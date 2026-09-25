@@ -18,6 +18,8 @@ defmodule SertantaiComplianceWeb.HealthController do
     json(conn, %{
       status: "ok",
       service: "sertantai-compliance",
+      # Checked by scripts/deployment/deploy-prod.sh after a release
+      version: Application.spec(:sertantai_compliance, :vsn) |> to_string(),
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
     })
   end

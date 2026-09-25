@@ -9,7 +9,8 @@
 #   ./scripts/deployment/build-frontend.sh [tag]
 #
 # Arguments:
-#   tag - Optional image tag (default: latest)
+#   tag - Optional image tag (default: the release version in backend/mix.exs;
+#         'latest' is refused). The image is also tagged sha-<short commit>.
 #
 # Prerequisites:
 #   - Docker installed and running
@@ -30,7 +31,10 @@ NC='\033[0m' # No Color
 
 # Image configuration (update with your GitHub org/user)
 IMAGE_NAME="ghcr.io/shotleybuilder/sertantai-compliance-frontend"
-IMAGE_TAG="${1:-latest}"
+source "$(dirname "$(readlink -f "$0")")/lib/version.sh"
+IMAGE_TAG="${1:-$(release_version)}" || exit 1
+check_image_tag "$IMAGE_TAG" || exit 1
+SHA_TAG="$(sha_tag)"
 FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 
 # Navigate to project root (two levels up from scripts/deployment/)
@@ -66,6 +70,7 @@ echo ""
 # Build the image with progress output
 docker build \
     --tag "${FULL_IMAGE}" \
+    --tag "${IMAGE_NAME}:${SHA_TAG}" \
     --file frontend/Dockerfile \
     frontend/
 

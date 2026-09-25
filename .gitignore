@@ -50,3 +50,6 @@ rel/
 
 # Session SQLite index (derived artifact, rebuilt by session_index.py)
 .claude/sessions/sessions.db
+
+# Benchmark runs made by the sertantai-legal session (labels legal-*): not committed here
+backend/priv/benchmarks/*/runs/*-legal-*/

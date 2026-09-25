@@ -53,6 +53,8 @@
 		return currentPath === href || currentPath.startsWith(href + '/');
 	}
 
+	const appVersion = __APP_VERSION__;
+
 	function signOut() {
 		adminAuth.clear();
 		goto(`${HUB_URL}/login`);
@@ -128,6 +130,9 @@
 							</span>
 						{/if}
 						<span class="text-sm text-gray-500">{user.email || user.name || ''}</span>
+						<span class="text-xs text-gray-400" title="SertantAI Compliance version"
+							>v{appVersion}</span
+						>
 						<button on:click={signOut} class="text-sm text-gray-500 hover:text-gray-700">
 							Sign out
 						</button>

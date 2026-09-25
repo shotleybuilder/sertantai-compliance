@@ -29,7 +29,7 @@ they are resumed.
 | 5 | [Change Pipeline](./05-change-pipeline.md) | suspended | 3 | 1 | ChangeDetector triggered, baseline checkpoint, change feed QA |
 | 6 | [Accuracy Iteration Loop](./06-accuracy-loop.md) | pending | 4 | 1–3 | Weekly benchmark, legal-side fixes, recall ≥95% |
 | 7 | [Context-First Profiler](../2026-08-15-context-first-profiler.md) | pending (stretch) | gate 10 Oct | 2–3 | Existing pending session — contextual actor vocabulary |
-| 8 | [Production Hardening](./08-prod-hardening.md) | pending | 3 | 3 | Per-user IDB, real-user auth, backups, monitoring |
+| 8 | [Production Hardening](./08-prod-hardening.md) | **active** | 3 | 3 | Per-user IDB, real-user auth, backups, monitoring |
 | 9 | [RC & QQ Pilot](./09-rc-pilot.md) | pending | 2, 5, 6, 8 | 3–4 | v0.1.0-rc.1 in prod ~17 Oct, UAT feedback |
 | 10 | [v0.1.0 Release](./10-release.md) | pending | 9 | 4 | Tag ~27 Oct, GitHub Release, QQ handover |
 

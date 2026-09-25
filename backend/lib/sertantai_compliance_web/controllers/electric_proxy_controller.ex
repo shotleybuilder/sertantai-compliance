@@ -2,9 +2,10 @@ defmodule SertantaiComplianceWeb.ElectricProxyController do
   @moduledoc """
   Gatekeeper-pattern proxy for ElectricSQL shape requests.
 
-  All shape requests are validated by sertantai-auth's Gatekeeper endpoint,
-  which checks authentication, role-based access, and injects appropriate
-  WHERE clauses (e.g. organization_id scoping for org-specific tables).
+  Public reference tables (`@public_tables`) pass through without auth. Every
+  other shape request, including follow-up requests carrying a `handle`, is
+  validated by sertantai-auth's Gatekeeper endpoint, which checks
+  authentication and role access and injects the organization_id WHERE clause.
 
   The Electric secret is appended server-side so it never reaches the client.
 
@@ -20,8 +21,8 @@ defmodule SertantaiComplianceWeb.ElectricProxyController do
   @passthrough_params ~w(offset handle live cursor replica log
                          subset__where subset__params subset__limit subset__offset subset__order_by)
 
-  # Tables allowed for shape recovery (DELETE). Kept as a simple static list
-  # since DELETE doesn't need full Gatekeeper validation.
+  # Tables allowed for shape recovery (DELETE). Org tables among them still
+  # require Gatekeeper validation (see delete_shape/2).
   @allowed_tables ~w(legal_register legal_register_uk legal_register_au legal_articles_uk legal_articles_au amendment_annotations organization_locations location_screenings org_applicabilities legislative_definitions)
 
   # Public reference tables — no auth required, bypass Gatekeeper.
@@ -31,26 +32,25 @@ defmodule SertantaiComplianceWeb.ElectricProxyController do
   @doc """
   Proxy GET /api/electric/v1/shape to Electric's HTTP API.
 
-  All shapes are validated via sertantai-auth's Gatekeeper, which checks
-  authentication, role access, and injects org-scoped WHERE clauses.
+  Public tables pass through; all other shapes are validated via
+  sertantai-auth's Gatekeeper on every request (see moduledoc).
   """
   def shape(conn, params) do
     table = params["table"]
-    handle = params["handle"]
 
     cond do
-      # Follow-up requests (live polling) with an existing handle skip the
-      # Gatekeeper — the initial shape request already validated access.
-      # The handle is only valid for shapes Electric has already created,
-      # and the ELECTRIC_SECRET is still appended server-side.
-      is_binary(table) and table in @allowed_tables and is_binary(handle) and handle != "" ->
-        forward_with_handle(conn, params)
-
-      # Public reference tables (uk_lrt, lat, amendment_annotations) — no auth required.
-      # These are read-only shared data, mirroring the public REST API routes.
+      # Public reference tables (legal_register, legislative_definitions, ...):
+      # no auth required, read-only shared data, mirroring the public REST
+      # routes. Follow-up (handle/offset/live) requests pass through too.
       is_binary(table) and table in @public_tables ->
         forward_public_shape(conn, params)
 
+      # Everything else, INCLUDING follow-up requests that carry a handle, is
+      # validated by the Gatekeeper on every request, which re-injects the
+      # org-scoped WHERE. A handle is not proof of access: Electric answers a
+      # mismatched handle by pointing at the shape for the client's own
+      # params, so skipping validation for handle requests leaked every org's
+      # rows to unauthenticated callers (fixed 2026-09-25).
       is_binary(table) ->
         forward_gatekeeper_shape(conn, params)
 
@@ -63,62 +63,79 @@ defmodule SertantaiComplianceWeb.ElectricProxyController do
   Proxy DELETE /api/electric/v1/shape for shape recovery.
 
   Used by the frontend to delete broken shapes after Electric restarts.
-  Uses a simple static allowlist — no Gatekeeper needed for DELETE.
+  Public tables need no auth; org tables need a Gatekeeper-validated token.
   """
   def delete_shape(conn, params) do
     table = params["table"]
 
-    if table in @allowed_tables do
-      electric_url = Application.get_env(:sertantai_compliance, :electric_url)
+    cond do
+      table in @public_tables ->
+        do_delete_shape(conn, params)
 
-      unless electric_url do
-        raise "electric_url not configured"
-      end
-
-      shape_params = %{"table" => table}
-
-      # Pass through columns param if provided — Electric validates columns
-      # even on DELETE, and rejects shapes that include generated columns.
-      shape_params =
-        case params["columns"] do
-          cols when is_binary(cols) and cols != "" ->
-            Map.put(shape_params, "columns", cols)
-
-          _ ->
-            shape_params
+      # Org tables: deleting a shape forces a resync, so require the same
+      # Gatekeeper validation as reading it.
+      table in @allowed_tables ->
+        with [bearer | _] <- Plug.Conn.get_req_header(conn, "authorization"),
+             {:ok, _shape} <- validate_with_gatekeeper(params, bearer) do
+          do_delete_shape(conn, params)
+        else
+          {:error, status, body} -> conn |> put_status(status) |> json(body)
+          _ -> conn |> put_status(401) |> json(%{error: "Authentication required"})
         end
 
-      query_params =
-        shape_params
-        |> maybe_add_secret()
-        |> encode_electric_query()
+      true ->
+        conn |> put_status(400) |> json(%{error: "Unknown or disallowed shape"})
+    end
+  end
 
-      upstream_url = "#{electric_url}/v1/shape?#{query_params}"
+  defp do_delete_shape(conn, params) do
+    table = params["table"]
 
-      case Req.delete(upstream_url, req_options()) do
-        {:ok, %Req.Response{status: status}} when status in 200..299 ->
-          send_resp(conn, 202, "")
+    electric_url = Application.get_env(:sertantai_compliance, :electric_url)
 
-        {:ok, %Req.Response{status: 400, body: body}} ->
-          # Electric validates generated columns even on DELETE. Treat 400 as success
-          # for shape recovery — the stale shape is already broken, and the next GET
-          # with explicit columns will create a valid new shape.
-          Logger.info(
-            "Electric shape delete returned 400 (treating as success): #{inspect(body)}"
-          )
+    unless electric_url do
+      raise "electric_url not configured"
+    end
 
-          send_resp(conn, 202, "")
+    shape_params = %{"table" => table}
 
-        {:ok, %Req.Response{status: status, body: body}} ->
-          Logger.warning("Electric shape delete returned #{status}: #{inspect(body)}")
-          send_resp(conn, status, "")
+    # Pass through columns param if provided — Electric validates columns
+    # even on DELETE, and rejects shapes that include generated columns.
+    shape_params =
+      case params["columns"] do
+        cols when is_binary(cols) and cols != "" ->
+          Map.put(shape_params, "columns", cols)
 
-        {:error, reason} ->
-          Logger.error("Electric shape delete failed: #{inspect(reason)}")
-          send_resp(conn, 502, "")
+        _ ->
+          shape_params
       end
-    else
-      conn |> put_status(400) |> json(%{error: "Unknown or disallowed shape"})
+
+    query_params =
+      shape_params
+      |> maybe_add_secret()
+      |> encode_electric_query()
+
+    upstream_url = "#{electric_url}/v1/shape?#{query_params}"
+
+    case Req.delete(upstream_url, req_options()) do
+      {:ok, %Req.Response{status: status}} when status in 200..299 ->
+        send_resp(conn, 202, "")
+
+      {:ok, %Req.Response{status: 400, body: body}} ->
+        # Electric validates generated columns even on DELETE. Treat 400 as success
+        # for shape recovery — the stale shape is already broken, and the next GET
+        # with explicit columns will create a valid new shape.
+        Logger.info("Electric shape delete returned 400 (treating as success): #{inspect(body)}")
+
+        send_resp(conn, 202, "")
+
+      {:ok, %Req.Response{status: status, body: body}} ->
+        Logger.warning("Electric shape delete returned #{status}: #{inspect(body)}")
+        send_resp(conn, status, "")
+
+      {:error, reason} ->
+        Logger.error("Electric shape delete failed: #{inspect(reason)}")
+        send_resp(conn, 502, "")
     end
   end
 
@@ -131,29 +148,6 @@ defmodule SertantaiComplianceWeb.ElectricProxyController do
       raise "electric_url not configured"
     end
 
-    query_params =
-      params
-      |> Map.take(["table", "where", "columns" | @passthrough_params])
-      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-      |> Map.new()
-      |> maybe_add_secret()
-      |> encode_electric_query()
-
-    upstream_url = "#{electric_url}/v1/shape?#{query_params}"
-    stream_from_electric(conn, upstream_url)
-  end
-
-  # --- Handle-based pass-through (live polling, already validated) ---
-
-  defp forward_with_handle(conn, params) do
-    electric_url = Application.get_env(:sertantai_compliance, :electric_url)
-
-    unless electric_url do
-      raise "electric_url not configured"
-    end
-
-    # Pass through all client params (table, where, columns, offset, handle, etc.)
-    # and append the server-side secret.
     query_params =
       params
       |> Map.take(["table", "where", "columns" | @passthrough_params])

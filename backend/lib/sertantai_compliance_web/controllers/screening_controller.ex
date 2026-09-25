@@ -777,19 +777,6 @@ defmodule SertantaiComplianceWeb.ScreeningController do
     )
   end
 
-  @doc "POST /api/screening/debug-dump — dev-only: save seed preview JSON to data dir"
-  def debug_dump(conn, params) do
-    if Mix.env() == :prod do
-      conn |> put_status(404) |> json(%{error: "Not available"})
-    else
-      path = Path.join(["data", "seed-preview-dump.json"])
-      File.mkdir_p!("data")
-      File.write!(path, Jason.encode!(params, pretty: true))
-      Logger.info("[ScreeningController] Debug dump saved to #{path}")
-      json(conn, %{saved: path})
-    end
-  end
-
   defp serialize_profile(profile) do
     %{
       id: profile.id,
@@ -919,8 +906,8 @@ defmodule SertantaiComplianceWeb.ScreeningController do
 
     materiality_filter = Map.get(params, "materiality")
     event_filter = Map.get(params, "event")
-    limit = Map.get(params, "limit", "50") |> to_string() |> String.to_integer()
-    offset = Map.get(params, "offset", "0") |> to_string() |> String.to_integer()
+    limit = bounded_int(params["limit"], 50, 1, 500)
+    offset = bounded_int(params["offset"], 0, 0, 1_000_000)
 
     {where_clauses, query_params} =
       build_changes_filter(org_id_binary, materiality_filter, event_filter)
@@ -1010,6 +997,15 @@ defmodule SertantaiComplianceWeb.ScreeningController do
       ~s(attachment; filename="legal-changes-#{Date.utc_today()}.csv")
     )
     |> send_resp(200, body)
+  end
+
+  # Parse an integer query param, falling back to default and clamping to
+  # [lo, hi] (bad input used to raise; a huge limit meant a huge query).
+  defp bounded_int(value, default, lo, hi) do
+    case Integer.parse(to_string(value || default)) do
+      {n, ""} -> n |> max(lo) |> min(hi)
+      _ -> default
+    end
   end
 
   defp csv_cell(nil), do: ""

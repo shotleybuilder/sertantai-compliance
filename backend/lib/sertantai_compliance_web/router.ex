@@ -19,7 +19,6 @@ defmodule SertantaiComplianceWeb.Router do
   # API endpoints
   scope "/api", SertantaiComplianceWeb do
     pipe_through :api
-    get "/hello", HelloController, :index
 
     # ElectricSQL Gatekeeper proxy — injects ELECTRIC_SECRET server-side
     get "/electric/v1/shape", ElectricProxyController, :shape
@@ -64,7 +63,6 @@ defmodule SertantaiComplianceWeb.Router do
     put "/changes/:id/decide", ScreeningController, :decide_change
 
     # Debug (dev only)
-    post "/debug-dump", ScreeningController, :debug_dump
 
     # Provisions (drill-down)
     get "/laws/:law_name/provisions", ScreeningController, :provisions

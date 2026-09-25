@@ -34,7 +34,7 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 - ⬜ **Real-user auth**: an actual QQ user account goes hub → auth → compliance end to end. Check token refresh, logout, and org scoping on every API route and Electric shape (legal#29, #36, #47).
 - ⬜ **Monitoring**: uptime check on `/health`, error tracking (backend and frontend), and log retention.
 - ⬜ **Performance**: first-load sync time for browse and glossary on a typical corporate laptop and network.
-- ⬜ **Security**: `mix sobelow`, dependency audit, CORS origins, secrets review.
+- ✅ **Security review (code side)** 2026-09-25: see below. Stack-side follow-ups are on #25
 - ⬜ **Support basics**: version shown in the UI, a contact route for QQ users, known-issues list.
 
 ## Electric proxy: cross-tenant data leak (found and fixed 2026-09-25)
@@ -91,3 +91,24 @@ npm 11 warns that esbuild's and svelte-preprocess's install scripts are "not cov
 - The hub push scripts failed silently: `GHCR_TOKEN` in the user's shell is stale, and `docker login` fails under `set -e` with no message. `env -u GHCR_TOKEN` uses the existing Docker login.
 - The builds first failed with "no space left on device" (`/var/home` 97% full). Pruned only the Docker build cache (6.7 GB); images, containers and volumes were untouched.
 - Hub has 26 failing backend tests unrelated to this change (hub#23, `organizations` table missing in the test DB). Verified by running the suite without the change: 77/103.
+
+## Security review (2026-09-25)
+
+Beyond the Electric proxy leak (fixed earlier):
+
+| # | Finding | Severity | Action |
+|---|---|---|---|
+| 1 | `POST /api/screening/debug-dump` wrote the request body to a file. The `Mix.env() == :prod` guard doesn't work in a release (Mix isn't included), so prod got a 500 rather than 404. Unused by the frontend | Low–medium | **Removed** route and action |
+| 2 | `AuthPlug` accepted tokens without `org_id` (the assign became nil; no leak, but relied on downstream behaviour) | Medium | **Fixed**: missing or non-UUID `org_id` → 401; tests with real Ed25519-signed tokens |
+| 3 | `changes_list` `limit`/`offset` via `String.to_integer` (a bad value raised; an unbounded limit meant a huge query) | Low | **Fixed**: `bounded_int/4` clamps limit to 1..500 and offset to ≥0 |
+| 4 | `/api/hello`: unauthenticated starter-template endpoint exposing the environment | Low | **Removed** |
+| 5 | Sobelow `--config`: clean. Full low-threshold scan: 35 hits, all triaged | — | SQL hits interpolate code constants or placeholder lists, not user input. `String.to_atom` hits are on DB column names / Baserow builders (offline). File hits are the benchmark mix task / Baserow recipes (offline) |
+| 6 | JWT verification: `verify_strict` pinned to EdDSA; `exp` required and checked | OK | — (no `iss`/`aud` check; tokens are shared across SertantAI services by design) |
+| 7 | Secrets: nothing committed. Scan hits were a Baserow field-type name and localhost URLs in `.env.development` | OK | — |
+| 8 | CORS: origins are compiled in, including localhost and `FRONTEND_URL \|\| ""`. Prod is same-origin via nginx, and auth is a bearer token (not cookies), so there's little CORS risk | Low | Follow-up: dev-only origins via runtime config |
+| 9 | `/health/detailed` is public (nginx `location /health` prefix): node name, OTP/Elixir versions, DB status | Low | Follow-up: restrict or trim |
+| 10 | nginx: no HSTS, no Content-Security-Policy (has X-Frame-Options, nosniff, Referrer-Policy) | Low–medium | #25 (sertantai-stack) |
+| 11 | No rate limiting on the API or proxy | Low | Post-v0.1 |
+| 12 | Within an org, every authenticated user can write the register (access control deferred, fitness 04) | Product | v0.1 treats QQ users as trusted editors |
+
+Tests: 98 backend (4 new AuthPlug). Credo and Dialyzer clean.

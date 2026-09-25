@@ -27,10 +27,11 @@ defmodule SertantaiComplianceWeb.AuthPlug do
   def call(conn, _opts) do
     with {:ok, token} <- extract_token(conn),
          {:ok, claims} <- verify_token(token),
-         {:ok, user_id} <- extract_user_id(claims) do
+         {:ok, user_id} <- extract_user_id(claims),
+         {:ok, org_id} <- extract_org_id(claims) do
       conn
       |> assign(:current_user_id, user_id)
-      |> assign(:organization_id, claims["org_id"])
+      |> assign(:organization_id, org_id)
       |> assign(:user_role, claims["role"])
       |> assign(:jwt_claims, claims)
     else
@@ -100,4 +101,15 @@ defmodule SertantaiComplianceWeb.AuthPlug do
   defp extract_user_id(%{"sub" => "user?id=" <> user_id}), do: {:ok, user_id}
   defp extract_user_id(%{"sub" => sub}) when is_binary(sub), do: {:ok, sub}
   defp extract_user_id(_claims), do: {:error, "Token missing sub claim"}
+
+  # Every compliance route is org-scoped: a token without a valid org_id is
+  # rejected here rather than reaching queries with a nil organization.
+  defp extract_org_id(%{"org_id" => org_id}) when is_binary(org_id) do
+    case Ecto.UUID.cast(org_id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, "Token org_id is not a valid UUID"}
+    end
+  end
+
+  defp extract_org_id(_claims), do: {:error, "Token missing org_id claim"}
 end

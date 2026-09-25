@@ -1,0 +1,87 @@
+{
+  "certifications": [
+    "iso_14001",
+    "iso_45001",
+    "iso_50001"
+  ],
+  "conditions": [
+    "at_work"
+  ],
+  "contract_requirements": [
+    "jsp_375"
+  ],
+  "governed_actors": [
+    "Org: Employer",
+    "Org: Occupier",
+    "Operator",
+    "Manufacturer",
+    "Importer",
+    "Client",
+    "Producer",
+    "Carrier",
+    "Consignor",
+    "Tenant",
+    "Ind: Employee",
+    "Ind: Worker",
+    "Ind: Person at Work"
+  ],
+  "government_actors": [],
+  "locations": [
+    "premises",
+    "workplace",
+    "establishment",
+    "aircraft",
+    "ship",
+    "harbour",
+    "territorial_sea",
+    "coastal_waters",
+    "laboratory"
+  ],
+  "materials": [
+    "explosives",
+    "chemicals",
+    "dangerous_substances",
+    "substances",
+    "lead",
+    "asbestos",
+    "biological_agents",
+    "ionising_radiation",
+    "radioactive",
+    "pressure_equipment",
+    "pressure_systems",
+    "electrical_equipment",
+    "work_equipment",
+    "noise",
+    "waste",
+    "effluent",
+    "petroleum",
+    "dangerous_goods",
+    "vehicle",
+    "goods_vehicle",
+    "vessel",
+    "fire",
+    "fluorinated_gases",
+    "lasers",
+    "optical_radiation",
+    "firearms",
+    "legionella",
+    "vibration",
+    "acetylene"
+  ],
+  "processes": [
+    "diving_operations",
+    "lifting_operations",
+    "work_at_height",
+    "construction_work",
+    "carriage_of_goods",
+    "confined_spaces"
+  ],
+  "regions": [
+    "England",
+    "Scotland",
+    "Wales"
+  ],
+  "sector": [
+    "defence"
+  ]
+}

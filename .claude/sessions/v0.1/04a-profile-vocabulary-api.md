@@ -29,7 +29,7 @@ Taken together, QQ's profile barely touches the trees.
 - ✅ REST: `PUT /profile` (replace, all fields), `PATCH /profile`, `POST /profile/check`, `GET /vocabulary` + `about`/`fields`/`dimensions`; unknown values stored with `warnings`, `?strict=true` rejects (422); wizard saves via PATCH so API-only fields survive
 - ⬜ OpenAPI spec for the profile + evaluate endpoints
 - ⬜ Wizard uses the corpus vocabulary instead of hard-coded lists
-- ⬜ Build QQ's reviewed profile **via the API** (dogfood as an AI client) from independent QQ evidence, not from its legacy register; user corrects it
+- ⬜ (draft done, awaiting user correction) Build QQ's reviewed profile **via the API** (dogfood as an AI client) from independent QQ evidence, not from its legacy register; user corrects it
 - ✅ Tests: Vocabulary (normalise/route/suggest), profile_from_screening/2 routing, profile API (PUT/PATCH/check/strict/vocabulary): 64 passing
 
 ## Dependencies
@@ -99,3 +99,30 @@ The QQ tags that are still unknown need semantic review, not string matching: `l
 - `GET /vocabulary` gives a flat `fitness_entities` list with no dimension, meaning or counts. `activities` is a legacy field the evaluator ignores.
 - Auth is JWT via hub login only. API tokens for AI agents are an auth-service concern and part of v0.2 MCP.
 - The wizard's "Additional questions" (conditional) checkboxes aren't bound to anything, so the answers are discarded.
+
+## QQ profile draft (2026-09-25)
+
+Built from independent evidence: Enhesa site "Last Comment" text (Farnborough 830 rows, Fort Halstead 442), conditional requirement text Enhesa marked applicable per site, and QQ's BMS categories (semi-independent). **Not** from the legacy register. Checked with `OrgScreeningProfile.check/1` and dry-run evaluated. **Not saved**; awaiting user correction. Draft: `backend/priv/benchmarks/qq/profile_draft.json`.
+
+Key choices:
+- `government_actors` is empty (the as-found profile had HSE and supply-chain roles).
+- No `nuclear` (no licensed sites; "REPPIR not applicable") and no `installation` (mostly offshore).
+- 12 evidenced facts with no tree code are kept as profile gaps: consignor, tenant, laboratory, fluorinated_gases, lasers, optical_radiation, firearms, legionella, vibration, acetylene, confined_spaces, defence.
+
+### Dry-run results (546 in-force Making laws with trees; QQ legacy register has 310 of them)
+
+| Profile | Applies | Agree with register | Register-only | Screener-only |
+|---------|---------|---------------------|---------------|---------------|
+| territory only (E/S/W) | 205 | 123 | 187 | 82 |
+| as-found | 285 | 165 | 145 | 120 |
+| draft | 299 | 173 | 137 | 126 |
+| draft + true generic codes (building, land, body_corporate, licence, transport, vehicle, water, person) | 309 | 177 | 133 | 132 |
+| … + `construction` | 290 | 165 | 145 | 125 |
+
+**Conclusion: the profile is no longer the main lever.**
+- 205 laws apply on territory alone, so trees for those laws have no substantive condition.
+- With a rich, evidence-based profile, about 45% of evaluable register laws still don't match.
+- Missed laws' trees are dominated by generic or government codes: `construction` 85, `secretary_of_state` 34, `local_authority` 28, `building` 28, `body_corporate` 27, `licence` 25, `land` 24. Government actors are usually in an OR with governed actors (e.g. `local_authority` OR `occupier`), so they rarely block on their own.
+- **Adding `construction` lowers matches.** `construction` sits beside `interpretation` in trees (statutory "construction", i.e. interpretation), and appears to feed `Not` (disapplies) nodes. That's a word-sense error in legal's extraction.
+
+Per-law cause attribution belongs to the benchmark (session 04). The tree-quality findings go to sertantai-legal#161.

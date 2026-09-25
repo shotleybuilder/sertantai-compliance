@@ -1,17 +1,81 @@
 ---
 session: "v0.1-04: Screener Benchmark Harness"
-status: active
+status: closed
 opened: 2026-09-25
+closed: 2026-09-25
+outcome: success
 parent: v0.1/meta.md
-depends_on: ["v0.1/04a-profile-vocabulary-api"]
 
 summary: >
-  Build a repeatable measure of screener accuracy against QQ's known legal
-  register, so that "manually test and iterate" becomes a loop with numbers.
-  Every data fix in session 06 is judged by this benchmark.
+  Built mix screener.benchmark. It screens an org profile, compares the result
+  with the org's legacy register (a reference, not ground truth), and gives
+  every disagreement a probable cause by what-if re-evaluation of the tree.
+  QQ baseline: evaluable agreement 45.1% (reviewed profile) vs 43.0%
+  (as-found). Ranked causes posted to sertantai-legal#161. Top ones: not_making
+  163, revoked 104, disapplied_by_not 79, no_tree 74.
+
+decisions:
+  - what: Treat the legacy register as a reference to triage, not ground truth
+    why: User. QQ's register has revoked laws and drift. The screener's value is diagnosing a legacy register as much as producing one.
+    result: Agreement matrix (both / register_only / screener_only / agree_no) with causes on the register, classification, tree, profile or unknown side
+  - what: Suspend the benchmark until the profile was fixed (04a)
+    why: QQ's profile vocabulary barely reached the trees, so an early benchmark would have measured the profile, not the screener
+    result: Routing fix plus a reviewed profile first; the benchmark then showed the trees are the limit
+  - what: Attribute causes by what-if re-evaluation, adding only positive codes
+    why: Adding codes inside Not subtrees triggers disapplication and mislabelled 97 laws
+    result: Ordered checks (generic → gov → construction → single dimension → all dimensions → profile triggers Not → expired TimeWindow → unexplained); 1 unexplained
+  - what: Snapshot register membership; read corpus state live
+    why: Register membership must not drift between runs, but legal's fixes (revocations, trees) should show up in the next run
+    result: legacy_register.csv fixture; runs report deltas against the previous run of the same label
+  - what: Extract Fitness.Screener from the evaluate controller
+    why: The benchmark must measure exactly what users see
+    result: POST /evaluate and the benchmark share corpus/0 and screen/2
+
+metrics:
+  corpus: { making_in_force_uk: 3250, with_trees: 546, coverage: 0.17 }
+  qq_reviewed: { applies: 299, both: 173, register_only: 478, screener_only: 126, agree_no: 19, evaluable_agreement: 0.451 }
+  qq_as_found: { applies: 285, both: 165, register_only: 486, screener_only: 120, evaluable_agreement: 0.430 }
+  top_causes: { not_making: 163, revoked: 104, disapplied_by_not: 79, no_tree: 74, register_gap_or_overmatch: 65, territory_branch_match: 38, outside_time_window: 20, territory_only_tree: 16, generic_code_gate: 15 }
+  trees: { with_not: 315, with_expired_timewindow: 50 }
+  tests: { backend: 69 }
+
+lessons:
+  - title: "Not nodes penalise accurate profiles"
+    detail: "The reviewed profile cut profile-side misses from 36 to 9 but raised disapplied_by_not from 23 to 79. One true fact (construction_work, scotland, employer) disapplies a whole law. Scope exclusions are compiled as whole-law negation, and some are inverted (scotland disapplies the Continuity (Scotland) Act)."
+    tag: data
+  - title: "What-if attribution must exclude Not-subtree codes"
+    detail: "Filling a profile with all of a tree's codes also triggers its Not nodes, so every law looks disapplied. Add only positive codes, and report disapplication only when the org's own profile triggers a Not."
+    tag: data
+  - title: "Expired TimeWindows make laws apply to nobody"
+    detail: "50 of 546 trees have a TimeWindow end date in the past. For example, UK_anaw_2017_2 runs from 2017-04-03 to 2017-04-15, a commencement date taken as an end date."
+    tag: data
+  - title: "Half of 'register-only' is the register's side"
+    detail: "267 of 478 register-only laws are revoked (104) or not Making (163). A benchmark that counted them as screener misses would badly understate the screener and hide register cleanup findings for the customer."
+    tag: data
+  - title: "Credo 1.7.13 crashes on Elixir 1.20 sigil tokens"
+    detail: "A FunctionClauseError in Credo.Code.Token.position/1 on ~r sigils. It was missed in the 1.20 migration because manual runs only checked the last line of output; the pre-commit hook caught it. Fixed by upgrading to credo 1.7.19. Check exit codes, not tails."
+    tag: tooling
+
+artifacts:
+  - backend/lib/sertantai_compliance/fitness/screener.ex
+  - backend/lib/sertantai_compliance/fitness/benchmark.ex
+  - backend/lib/mix/tasks/screener.benchmark.ex
+  - backend/test/sertantai_compliance/fitness/benchmark_test.exs
+  - backend/priv/benchmarks/qq/legacy_register.csv
+  - backend/priv/benchmarks/qq/runs/2026-09-25-as_found/
+  - backend/priv/benchmarks/qq/runs/2026-09-25-reviewed/
+  - backend/lib/sertantai_compliance_web/controllers/screening_controller.ex
+
+depends_on:
+  - v0.1/04a-profile-vocabulary-api.md
+
+enables:
+  - "v0.1-06 accuracy loop (re-run after each legal fix; deltas per run)"
+  - "Screener tuning session (prefer inclusion; Not semantics)"
+  - "#23 Screener Gaps drill-down can reuse the cause taxonomy"
 ---
 
-# Session: Screener Benchmark Harness (ACTIVE)
+# Session: Screener Benchmark Harness (CLOSED)
 
 > **Resumed 2026-09-25**: 04a fixed vocabulary routing and saved QQ's reviewed profile. Dry runs show the trees are now the limiting factor, so the benchmark's job is to attribute each disagreement to a cause and rank the causes for sertantai-legal#161.
 
@@ -29,7 +93,7 @@ Screener accuracy has only been judged by eye, plus a one-off Enhesa report in J
 - ✅ Reviewed QQ profile saved (04a); snapshots in `backend/priv/benchmarks/qq/profile_as_found.json` and `profile_reviewed.json`, so the benchmark can run both
 - ✅ Baseline run recorded (as-found vs reviewed profile) with causes ranked
 - ✅ Posted ranked causes to sertantai-legal#161 (https://github.com/shotleybuilder/sertantai-legal/issues/161#issuecomment-5830971722)
-- ⬜ (Optional for v0.1) Reuse the cause classification in #23 Screener Gaps drill-down
+- ⏸️ (deferred: optional for v0.1) Reuse the cause classification in #23 Screener Gaps drill-down
 
 ## Dependencies
 

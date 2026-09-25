@@ -21,7 +21,7 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 ## Todo
 
 - ✅ **npm audit**: 10 → 5 with non-breaking `npm audit fix` (js-yaml, nanoid, devalue, vitest, @vitest/mocker); Vite dev server now binds localhost by default (`VITE_DEV_HOST` to override; set in `docker-compose.dev.yml`)
-- ⬜ **Svelte 5 / Vite 8 migration** clears the remaining 5 (see below). User's decision: before or after v0.1
+- ⏸️ **Svelte 5 / GridLite 0.10 / Vite 8 upgrade** clears the remaining 5. **Deferred until after v0.1** (user, 2026-09-25): pending session `2026-09-25-svelte5-gridlite-upgrade.md`
 - ⬜ **Backups**: the stack's backup/restore scripts are Baserow-only (found in 02). `deploy-prod.sh` now dumps `sertantai_legal_prod` before backend deploys; still needed: **scheduled** dumps, retention, off-server copies, and a tested restore, agreed with legal (shared DB)
 - ✅ **IDB isolation**: already scoped per org in `pglite/client.ts` (IDB name from the JWT `org_id`; the #106 fix was ported earlier)
 - ✅ **Electric proxy cross-tenant leak (critical, fixed 2026-09-25)**: see below
@@ -73,3 +73,10 @@ Remaining 5, all needing majors:
 **The full fix is a Svelte 5 migration.** vite-plugin-svelte 7 needs Svelte ≥5.46 and Vite 8. Compliance still uses Svelte 4 syntax (`$:`, `export let`, `on:click`). sertantai-legal has already migrated. The GridLite packages' peer ranges need checking.
 
 npm 11 warns that esbuild's and svelte-preprocess's install scripts are "not covered by allowScripts". The build still works (esbuild resolves its platform binary); revisit if Docker builds fail.
+
+### Decision: Svelte 5 upgrade after v0.1 (user, 2026-09-25)
+
+- SvelteKit 2.70 accepts Svelte 4 or 5, and so do all current dependencies. **Nothing forces Svelte 5 today.**
+- The driver in sertantai-legal was **GridLite kit 0.10.0, which requires Svelte 5**. Compliance can't move to it yet: `gridlite-adapter-pglite` (latest 0.7.3) still requires GridLite kit ^0.7. The adapter ↔ kit mismatch is currently hidden by `legacy-peer-deps`.
+- Legal is on Svelte 5 but still Vite 5, so its migration didn't clear the Vite finding either.
+- Plan: one post-v0.1 session. Release the adapter for GridLite 0.10, then Svelte 5, then GridLite 0.10, then Vite 8. Pull it forward if QQ needs a GridLite 0.9/0.10 feature or scans dependencies.

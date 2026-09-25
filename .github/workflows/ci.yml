@@ -10,7 +10,7 @@ env:
   MIX_ENV: test
   ELIXIR_VERSION: '1.18.4'
   OTP_VERSION: '27.2'
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '22.x'  # match frontend/Dockerfile
 
 jobs:
   backend-checks:
@@ -19,18 +19,18 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: sertantai_compliance_test
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 5436:5432  # config/test.exs uses 5436 (shared legal DB port in dev)
 
     steps:
       - name: Checkout code
@@ -86,23 +86,18 @@ jobs:
 
       - name: Run Sobelow
         working-directory: backend
-        run: mix sobelow --exit
-        continue-on-error: true
+        run: mix sobelow --config  # .sobelow-conf: exit on high, same as pre-push
 
       - name: Security audit
         working-directory: backend
-        run: mix deps.audit
-        continue-on-error: true
+        # Same accepted-advisory list as .githooks/pre-push
+        run: |
+          IGNORE=$(grep -v '^#' .deps-audit-ignore | grep -v '^$' | paste -sd, -)
+          mix deps.audit ${IGNORE:+--ignore-advisory-ids=$IGNORE}
 
       - name: Check unused dependencies
         working-directory: backend
         run: mix deps.unlock --check-unused
-        continue-on-error: true
-
-      - name: Check usage rules
-        working-directory: backend
-        run: mix usage_rules.check
-        continue-on-error: true
 
       - name: Run tests
         working-directory: backend

@@ -33,7 +33,10 @@ export default [
 			...tseslint.configs.recommended.rules,
 			'@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
 			'@typescript-eslint/no-explicit-any': 'warn',
-			'@typescript-eslint/explicit-module-boundary-types': 'off'
+			'@typescript-eslint/explicit-module-boundary-types': 'off',
+			// TypeScript (svelte-check) already reports undefined identifiers; the
+			// core rule doesn't understand TS/DOM lib types. See typescript-eslint FAQ.
+			'no-undef': 'off'
 		}
 	},
 	{
@@ -63,7 +66,10 @@ export default [
 			...svelte.configs.recommended.rules,
 			'svelte/no-at-html-tags': 'error',
 			'svelte/no-target-blank': 'error',
-			'svelte/valid-compile': 'error'
+			'svelte/valid-compile': 'error',
+			'no-undef': 'off',
+			// `x = x` is the Svelte 4 idiom for triggering reactivity after mutation
+			'no-self-assign': 'off'
 		}
 	},
 	{

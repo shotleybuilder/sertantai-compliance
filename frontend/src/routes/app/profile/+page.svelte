@@ -240,11 +240,6 @@
 		toggleTag(profileKey, tag);
 	}
 
-	function isIdentityActorSelected(tag: string): boolean {
-		const profileKey = isGovernmentActor(tag) ? 'government_actors' : 'governed_actors';
-		return getProfileValues(profileKey).includes(tag);
-	}
-
 	function getOptionsForKey(key: string): string[] {
 		switch (key) {
 			case 'governed_actors':
@@ -594,10 +589,6 @@
 		} else {
 			setProfileValues(profileKey, [...current, tag]);
 		}
-	}
-
-	function isSelected(profileKey: string, tag: string): boolean {
-		return getProfileValues(profileKey).includes(tag);
 	}
 
 	// Tailwind v4 class constants — defined statically so the scanner finds them

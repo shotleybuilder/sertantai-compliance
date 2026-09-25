@@ -35,7 +35,6 @@
 		seedDefaultGroups,
 		assignViewsToGroups
 	} from '$lib/views/seed-defaults';
-	import type { GroupDef } from '$lib/views/seed-defaults';
 	import { defaultViews, defaultGroupDefs, getViewGroupName } from '$lib/views/glossary-views';
 	import { getPglite, type PGLiteWithExtensions } from '$lib/pglite/client';
 	import { startSync, syncStatus } from '$lib/pglite/sync';

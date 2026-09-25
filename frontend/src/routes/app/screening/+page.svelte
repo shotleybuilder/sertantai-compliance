@@ -4,11 +4,9 @@
 		evaluate,
 		getProfile,
 		type EvaluationResult,
-		type EvaluationMatch,
 		type ScreeningProfile
 	} from '$lib/api/screening';
 	import { authFetch } from '$lib/api/client';
-	import { adminAuth } from '$lib/stores/auth';
 	import {
 		filterAndSort as _filterAndSort,
 		computeTabCounts as _computeTabCounts,

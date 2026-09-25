@@ -11,7 +11,6 @@
 		GroupConfig
 	} from '@shotleybuilder/svelte-gridlite-kit';
 	import { createPGLiteAdapter } from '@shotleybuilder/gridlite-adapter-pglite';
-	import { UK_LRT_COLUMN_METADATA } from '$lib/pglite/uk-lrt-columns';
 	import {
 		initViewStore,
 		SaveViewModal,
@@ -67,9 +66,6 @@
 		'latest_rescind_date_month'
 	];
 	$: BROWSE_SQL = `SELECT ${BROWSE_COLUMNS.join(', ')} FROM laws WHERE country = '${$selectedCountry}'`;
-	const browseColumnMetadata = UK_LRT_COLUMN_METADATA.filter((c) =>
-		BROWSE_COLUMNS.includes(c.name)
-	);
 
 	// PGLite + GridLite state
 	let db: PGLiteWithExtensions | null = null;

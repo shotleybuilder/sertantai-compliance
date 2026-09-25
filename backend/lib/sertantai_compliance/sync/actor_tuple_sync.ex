@@ -17,8 +17,6 @@ defmodule SertantaiCompliance.Sync.ActorTupleSync do
 
   alias SertantaiCompliance.Repo
 
-  require Logger
-
   @doc """
   Extract distinct (actor, position, drrp_type) tuples for an org's register.
 

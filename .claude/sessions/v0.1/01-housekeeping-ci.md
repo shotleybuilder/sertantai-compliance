@@ -31,7 +31,7 @@ Nothing in v0.1 can be trusted while CI is red, and there is loose state left ov
 - ✅ Upgrade Ash 3.27.7 → 3.33.11 (security advisory) + ash-functions v6 migration
 - ✅ Migrate to Elixir 1.20.4 / OTP 29.1.1 (local, CI, Docker, `.tool-versions`)
 - ✅ Migrate frontend to Node 26 (Docker, CI, `.tool-versions`); Docker build uses `npm ci`
-- ⬜ All workflows green on `main` (push blocked: gh token needs `workflow` scope)
+- ✅ All workflows green on `main`: CI runs for a705b5a and 4566fe2 both passed, first green runs since 2026-08-15
 
 ## Dependencies
 

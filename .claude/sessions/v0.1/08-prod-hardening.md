@@ -22,7 +22,7 @@ Make prod safe for several real QQ users: tenant isolation, a real-user login pa
 
 - ✅ **npm audit**: 10 → 5 with non-breaking `npm audit fix` (js-yaml, nanoid, devalue, vitest, @vitest/mocker); Vite dev server now binds localhost by default (`VITE_DEV_HOST` to override; set in `docker-compose.dev.yml`)
 - ⏸️ **Svelte 5 / GridLite 0.10 / Vite 8 upgrade** clears the remaining 5. **Deferred until after v0.1** (user, 2026-09-25): pending session `2026-09-25-svelte5-gridlite-upgrade.md`
-- ⬜ **Backups**: off-server target built (Hetzner Storage Box, 1 TB, 2026-09-25). Next: box settings (snapshots, sub-accounts), then the stack backup job, restore drill and freshness check. Design below
+- ✅ **Backups live on prod** 2026-09-25: stack `afa225d` pulled, `backup` container running (daily 02:00 UTC), both restic repos initialised, first backup (23 s) and restore drill (39 s) pass. Remaining: box **automatic snapshots** (user, Hetzner console) and the freshness alert (monitoring item)
 - ⬜ **NAS copy** (user's home NAS pulls from the Storage Box, read-only sub-account): third copy outside Hetzner
 - ✅ **IDB isolation**: already scoped per org in `pglite/client.ts` (IDB name from the JWT `org_id`; the #106 fix was ported earlier)
 - ✅ **Electric proxy cross-tenant leak (critical, fixed 2026-09-25)**: see below
@@ -201,3 +201,13 @@ Legal's reference data can be re-pushed from dev. `law_change_snapshots` can be 
   - an exact compliance-tables restore (QQ register 711, profiles 2, snapshots 3774, identical to live);
   - scratch DBs cleaned up.
 - Not yet done on the server: `.env` passwords, `restic init`, first backup, first drill, box snapshots, NAS key and pull.
+
+### Prod rollout (2026-09-25)
+
+- Pushed stack to `afa225d` and `git pull --ff-only` on the server. The server's manual changes were preserved: `ehs-enforcement.conf` → `.disabled`, untracked `nocodb.conf.disabled`. The pull also brought `93d6a50` (hub env) and `7975ecb` (nginx security) onto disk. Those aren't applied until nginx is reloaded / hub recreated.
+- `.env` passwords set by the user: both present and different (checked without printing).
+- `docker compose build backup && up -d --no-deps backup`. Compliance and the legal backend stayed stopped.
+- `restic init`: org `6a48018b` (`sftp:storagebox:repo`), private `42a554ed` (`sftp:storagebox:private`).
+- **First backup** (23 s): legal_prod 93.9 MiB, hub 23.7 KiB, compliance-tables 19.4 KiB, auth 25.1 KiB.
+- **Restore drill** (39 s): legal_prod 36 tables / ~487k rows, hub 5 / ~220, compliance-tables 10 / ~0, auth 6 / ~138. Scratch DBs dropped.
+- **Exposure (#25):** prod `org_applicabilities`, `organizations`, `org_screening_profiles` and `applicability_events` all have 0 rows, and `organization_locations` / `location_screenings` don't exist. **No org data could have leaked from prod.**

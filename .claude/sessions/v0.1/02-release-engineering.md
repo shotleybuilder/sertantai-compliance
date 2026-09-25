@@ -29,7 +29,7 @@ There are no tags and no changelog, and images are pushed as `:latest`. That mea
 - ✅ Runtime version: `/health` includes `version`; frontend shows `v0.1.0` (Vite define from package.json)
 - ✅ `docs/RELEASING.md` runbook: CI green → changelog → `release.sh` → build/push → DB backup (`sertantai-stack/scripts/backup.sh`) → schema before data → deploy pinned version → smoke → GitHub Release; plus rollback (previous version; migrations are forward-only, so restore the backup if needed)
 - ✅ GitHub milestone `v0.1` (due 2026-10-27): https://github.com/shotleybuilder/sertantai-compliance/milestone/1, with #22 (#23 deferred, #20 out of scope)
-- ⬜ Dry run: `scripts/release.sh 0.1.0-rc.0` on a throwaway branch, check bump/changelog/tag, then delete
+- ✅ Dry run on branch `release-rehearsal`: `0.1.0-rc.0` (3 files, changelog untouched, tag notes list Unreleased) then `0.1.0` (Unreleased → `[0.1.0] - 2026-09-25`, tag carries the notes for `--notes-from-tag`); guards refuse an empty Unreleased and an existing tag; tags and branch deleted
 - ✅ Pre-deploy DB backup in `deploy-prod.sh` (added: the backend migrates on container start)
 - ⏸️ Optional: CI workflow on `v*` tags that builds and pushes images (deferred: GHCR packages were created with a personal token; Actions push needs package permissions set up)
 
@@ -46,3 +46,9 @@ There are no tags and no changelog, and images are pushed as `:latest`. That mea
 - **One variable pins both images** (`SERTANTAI_COMPLIANCE_VERSION` in the stack compose). A partial deploy (`--frontend` or `--backend`) warns that the other service picks up the version on its next restart.
 - The `/health` version is what `deploy-prod.sh` checks after a deploy. The UI shows `v{version}` in the app header via a Vite `define` (read into a script constant; svelte-check doesn't see ambient globals in templates).
 - **Nothing was run against prod** in this session.
+
+### Dry-run notes
+
+- rc.0 changed `backend/mix.exs`, `frontend/package.json` and `package-lock.json` only. The final release also moved the changelog. Pre-commit hooks ran on both release commits.
+- **Slip:** a check meant to show "on main it would proceed" actually ran `release.sh 0.2.0-rc.1` on main. Piping to `head -1` killed it (SIGPIPE under `set -e -o pipefail`) before the bump. Verified afterwards: no tags, HEAD unchanged, version 0.1.0, clean tree. Lesson: never "probe" a mutating script by running it.
+- The `git add backend` in the tooling commit swept in the legal session's benchmark run. It was removed by amending the unpushed commit, and `.gitignore` now excludes `backend/priv/benchmarks/*/runs/*-legal-*/`.

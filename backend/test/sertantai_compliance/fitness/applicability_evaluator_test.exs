@@ -566,40 +566,61 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluatorTest do
     end
   end
 
-  # ── profile_from_screening/1 ───────────────────────────────────
+  # ── profile_from_screening/2 ───────────────────────────────────
 
-  describe "profile_from_screening/1" do
-    test "converts atom-keyed profile" do
+  alias SertantaiCompliance.Fitness.Vocabulary
+
+  # Minimal tree vocabulary: [code, dimension, uses, law_count]
+  @vocab Vocabulary.from_rows([
+           ["employer", "personal", 161, 60],
+           ["contractor", "personal", 11, 9],
+           ["england", "territorial", 477, 167],
+           ["scotland", "territorial", 491, 152],
+           ["offshore", "territorial", 109, 40],
+           ["premises", "territorial", 308, 100],
+           ["asbestos", "material", 20, 8],
+           ["construction_work", "material", 93, 30],
+           ["maritime", "material", 10, 5],
+           ["at_work", "conditional", 88, 73]
+         ])
+
+  describe "profile_from_screening/2" do
+    test "strips actor taxonomy prefixes so labels match bare tree codes" do
+      screening = %{governed_actors: ["Org: Employer"], government_actors: ["SC: C: Contractor"]}
+
+      profile = ApplicabilityEvaluator.profile_from_screening(screening, @vocab)
+
+      assert profile["personal"] == ["employer", "contractor"]
+    end
+
+    test "routes each code to the dimension the trees use it under" do
       screening = %{
-        governed_actors: ["Org: Employer", "SC: Contractor"],
-        government_actors: [],
+        governed_actors: ["Org: Employer"],
         regions: ["England", "Scotland"],
-        locations: ["offshore"],
+        # premises/offshore are territorial in trees, despite the locations field
+        locations: ["offshore", "premises"],
         materials: ["Asbestos"],
         processes: ["Construction Work"],
         sector: ["maritime"],
         certifications: ["iso_45001"]
       }
 
-      profile = ApplicabilityEvaluator.profile_from_screening(screening)
+      profile = ApplicabilityEvaluator.profile_from_screening(screening, @vocab)
 
-      assert "personal" in Map.keys(profile)
-      assert "territorial" in Map.keys(profile)
-      assert "material" in Map.keys(profile)
+      assert profile["personal"] == ["employer"]
+      assert Enum.sort(profile["territorial"]) == ["england", "offshore", "premises", "scotland"]
+      assert Enum.sort(profile["material"]) == ["asbestos", "construction_work", "maritime"]
+      # certifications are second-tier screening, not an evaluator dimension
+      refute Enum.any?(Map.values(profile), &("iso_45001" in &1))
+    end
 
-      # Personal = governed + government actors, normalised
-      assert "org:_employer" in profile["personal"]
-      assert "sc:_contractor" in profile["personal"]
+    test "unknown codes fall back to the field's natural dimension" do
+      screening = %{locations: ["laboratory"], governed_actors: ["Ind: User"]}
 
-      # Territorial = regions, normalised
-      assert "england" in profile["territorial"]
-      assert "scotland" in profile["territorial"]
+      profile = ApplicabilityEvaluator.profile_from_screening(screening, @vocab)
 
-      # Material = locations + materials + processes + sector, normalised
-      assert "offshore" in profile["material"]
-      assert "asbestos" in profile["material"]
-      assert "construction_work" in profile["material"]
-      assert "maritime" in profile["material"]
+      assert profile["material"] == ["laboratory"]
+      assert profile["personal"] == ["user"]
     end
 
     test "converts string-keyed profile (from JSON)" do
@@ -612,45 +633,37 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluatorTest do
         "sector" => []
       }
 
-      profile = ApplicabilityEvaluator.profile_from_screening(screening)
+      profile = ApplicabilityEvaluator.profile_from_screening(screening, @vocab)
 
-      assert "personal" in Map.keys(profile)
-      assert "territorial" in Map.keys(profile)
-      # Empty arrays don't create dimension keys
-      refute Map.has_key?(profile, "material")
+      assert profile == %{"personal" => ["employer"], "territorial" => ["england"]}
     end
 
     test "empty profile produces empty map" do
-      screening = %{
-        governed_actors: [],
-        government_actors: [],
-        regions: [],
-        locations: [],
-        materials: [],
-        processes: [],
-        sector: []
-      }
+      screening = %{governed_actors: [], regions: [], locations: [], materials: []}
 
-      profile = ApplicabilityEvaluator.profile_from_screening(screening)
-
-      assert profile == %{}
+      assert ApplicabilityEvaluator.profile_from_screening(screening, @vocab) == %{}
     end
 
-    test "includes conditional dimension if present" do
-      screening = %{
-        governed_actors: ["Org: Employer"],
-        regions: [],
-        locations: [],
-        materials: [],
-        processes: [],
-        sector: [],
-        conditional: ["employees_gte_5", "at_work"]
-      }
+    test "includes conditions (and legacy conditional key)" do
+      profile =
+        ApplicabilityEvaluator.profile_from_screening(
+          %{conditions: ["at_work"], conditional: ["employees_gte_5"]},
+          @vocab
+        )
 
-      profile = ApplicabilityEvaluator.profile_from_screening(screening)
+      assert Enum.sort(profile["conditional"]) == ["at_work", "employees_gte_5"]
+    end
 
-      assert "conditional" in Map.keys(profile)
-      assert "employees_gte_5" in profile["conditional"]
+    test "routed profile matches an employer tree that the prefixed label never matched" do
+      tree = %{"op" => "Match", "dimension" => "personal", "codes" => ["employer"]}
+
+      profile =
+        ApplicabilityEvaluator.profile_from_screening(
+          %{governed_actors: ["Org: Employer"]},
+          @vocab
+        )
+
+      assert %{applies: true} = ApplicabilityEvaluator.evaluate(tree, profile)
     end
   end
 end

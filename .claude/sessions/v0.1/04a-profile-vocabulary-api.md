@@ -21,8 +21,8 @@ Taken together, QQ's profile barely touches the trees.
 
 ## Todo
 
-- ⬜ Corpus-derived vocabulary: codes per evaluator dimension (from compiled trees), with law counts, definitions where available, and the profile field → dimension mapping
-- ⬜ Fix the dimension mapping so profile fields reach the dimension the trees use (e.g. premises/ship/aircraft are `territorial` in trees but `locations` → `material` in the profile)
+- ✅ Corpus-derived vocabulary (`Fitness.Vocabulary`: 727 codes, cached 10 min; normalise/lookup/suggest/route). Still to do for the API: definitions + field grouping in `GET /vocabulary`. codes per evaluator dimension (from compiled trees), with law counts, definitions where available, and the profile field → dimension mapping
+- ✅ Fix the dimension mapping (`profile_from_screening/2` routes via vocabulary + strips actor prefixes) so profile fields reach the dimension the trees use (e.g. premises/ship/aircraft are `territorial` in trees but `locations` → `material` in the profile)
 - ⬜ Persist conditional answers (`conditions` field + migration; 73 laws / 88 Match nodes use `conditional`); wire the wizard's unbound checkboxes
 - ⬜ Ash actions as the API foundation (MCP-ready for `ash_ai` in v0.2): `replace`, `patch` (only given keys change), vocabulary validation with closest-match suggestions, action/argument descriptions
 - ⬜ REST: `PUT /profile` (replace; stop dropping `certifications`/`contract_requirements`), `PATCH /profile`, self-describing `GET /vocabulary`, `POST /profile/validate`; keep `POST /evaluate` dry-run
@@ -65,6 +65,24 @@ Match nodes across the 579 in-force UK Making laws with trees:
 | defence | sector → material | not present; `armed_forces` (1), `crown_*` (personal) |
 
 So QQ's material and location side effectively matches only `diving_operations`. A large part of the apparent "screener misses" is likely the profile vocabulary, not law data.
+
+### Actor labels never match personal codes (all orgs)
+
+Tree personal codes are bare (`employer` 161, `employee` 165, `operator` 202, `contractor` 11, `manufacturer` 156…). Profile actor labels are prefixed (`Org: Employer`), and `normalise_code/1` turns them into `org:_employer`, so they **never match**. This affects every org, not just QQ.
+
+QQ's current profile run (546 in-force Making laws with trees): **223 apply**, and match reasons are almost all territorial (scotland 139, england+wales 72, wales 50…). In the personal dimension only `operator` (unprefixed) ever matched; no material code matched at all. The current QQ screen is essentially "laws with only territorial conditions in GB".
+
+Posted to sertantai-legal#161: https://github.com/shotleybuilder/sertantai-legal/issues/161#issuecomment-5830353694 (material vocabulary noise: 323 of 648 codes used once, non-material codes like person/authority/licence/offence; split synonyms; only 1 conditional code `at_work`; territorial mixes jurisdictions with place types). No code appears under more than one dimension, so routing by code is unambiguous.
+
+### Decision: route profile codes by the tree vocabulary
+
+User chose (2026-09-25) to keep human-friendly profile fields and route each code to the dimension the trees use it under, rather than restructuring the profile into evaluator dimensions.
+
+### Routing fix result (QQ's unchanged, as-found profile)
+
+Matches went from 223 to **285** of 546. Non-territorial match reasons now appear: employer 84, operator 71, worker 54, manufacturer 36, diving_operations 7, contractor 4, company 2. premises, ship and aircraft now route to territorial.
+
+The QQ tags that are still unknown need semantic review, not string matching: `laboratory` (no tree code), `radioactive_materials` (tree: `radioactive`, `ionising_radiation`, `nuclear`), `defence` (tree: `armed_forces`, `crown_*`), `Ind: User` (`downstream_user`?), `SC: C: Principal Designer` (`designer`), `Gvt: Agency: HSE` (not a QQ role). Suggestions use word overlap plus typo-level similarity (Jaro ≥ 0.9); defence → evidence (0.81) is rejected.
 
 ### Other API gaps
 

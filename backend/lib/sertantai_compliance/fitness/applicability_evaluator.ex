@@ -27,6 +27,8 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
       }
   """
 
+  alias SertantaiCompliance.Fitness.Vocabulary
+
   @type profile :: %{String.t() => list(String.t())}
   @type tree :: map()
   @type result :: %{applies: boolean(), confidence: float()}
@@ -150,58 +152,48 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
 
   # ── Profile conversion ────────────────────────────────────────
 
+  # Profile field → dimension used when a value isn't in the tree vocabulary.
+  # Known codes are routed to the dimension the trees use them under instead.
+  @field_fallback_dimensions [
+    governed_actors: "personal",
+    government_actors: "personal",
+    locations: "material",
+    materials: "material",
+    processes: "material",
+    sector: "material",
+    regions: "territorial",
+    conditions: "conditional",
+    conditional: "conditional"
+  ]
+
   @doc """
   Convert an `OrgScreeningProfile` (or its map representation) into the
   evaluator's dimension-keyed profile format.
 
-  Maps profile fields to expression tree dimensions:
-  - `governed_actors` + `government_actors` → `"personal"`
-  - `locations`, `materials`, `processes`, `sector` → `"material"`
-  - `regions` → `"territorial"`
+  Each value is normalised to the tree code convention (`"Org: Employer"` →
+  `"employer"`) and routed to the dimension the expression trees use it under,
+  via `SertantaiCompliance.Fitness.Vocabulary`. For example `premises` and
+  `ship` are territorial codes in the trees, even though the profile stores
+  them under `locations`.
 
-  The `"conditional"` and `"temporal"` dimensions must be provided separately
-  if needed (e.g. from questionnaire answers).
+  Values the trees don't use fall back to the field's natural dimension:
+  actors → `"personal"`; locations, materials, processes, sector →
+  `"material"`; regions → `"territorial"`; conditions → `"conditional"`.
+  They can't match any tree, but the profile still round-trips.
+
+  Pass `vocabulary` explicitly in tests; it defaults to the cached corpus
+  vocabulary.
   """
-  @spec profile_from_screening(map()) :: profile()
-  def profile_from_screening(screening_profile) when is_map(screening_profile) do
-    profile = %{}
+  @spec profile_from_screening(map(), Vocabulary.t() | nil) :: profile()
+  def profile_from_screening(screening_profile, vocabulary \\ nil)
+      when is_map(screening_profile) do
+    vocab = vocabulary || Vocabulary.current()
 
-    # Personal dimension: actor labels (normalised to lowercase)
-    personal =
-      (get_list(screening_profile, :governed_actors) ++
-         get_list(screening_profile, :government_actors))
-      |> Enum.map(&normalise_code/1)
-      |> Enum.uniq()
+    Enum.reduce(@field_fallback_dimensions, %{}, fn {field, fallback}, profile ->
+      %{dimensions: dims} = Vocabulary.route(get_list(screening_profile, field), vocab, fallback)
 
-    profile = if personal != [], do: Map.put(profile, "personal", personal), else: profile
-
-    # Material dimension: locations + materials + processes + sector
-    material =
-      (get_list(screening_profile, :locations) ++
-         get_list(screening_profile, :materials) ++
-         get_list(screening_profile, :processes) ++
-         get_list(screening_profile, :sector))
-      |> Enum.map(&normalise_code/1)
-      |> Enum.uniq()
-
-    profile = if material != [], do: Map.put(profile, "material", material), else: profile
-
-    # Territorial dimension: regions (lowercased)
-    territorial =
-      get_list(screening_profile, :regions)
-      |> Enum.map(&normalise_code/1)
-      |> Enum.uniq()
-
-    profile =
-      if territorial != [], do: Map.put(profile, "territorial", territorial), else: profile
-
-    # Conditional dimension: pass through if present
-    conditional = get_list(screening_profile, :conditional)
-
-    profile =
-      if conditional != [], do: Map.put(profile, "conditional", conditional), else: profile
-
-    profile
+      Map.merge(profile, dims, fn _dim, existing, new -> Enum.uniq(existing ++ new) end)
+    end)
   end
 
   defp get_list(map, key) when is_atom(key) do
@@ -219,10 +211,6 @@ defmodule SertantaiCompliance.Fitness.ApplicabilityEvaluator do
       _ ->
         []
     end
-  end
-
-  defp normalise_code(code) when is_binary(code) do
-    code |> String.downcase() |> String.replace(~r/\s+/, "_")
   end
 
   # ── Hierarchy expansion ───────────────────────────────────────────

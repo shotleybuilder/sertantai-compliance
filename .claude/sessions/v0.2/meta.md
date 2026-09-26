@@ -31,6 +31,11 @@ QQ pilot feedback (GitHub issues labelled `pilot`).
 
 ## Candidates (from v0.1 planning)
 
+- **Agent error triage** (user idea, 2026-09-26: "I'm pretty rubbish at monitoring emails"). A daily scheduled agent (GitHub Actions cron running Claude Code) reads new unresolved GlitchTip issues through a read-only API token or GlitchTip's MCP server (`GLITCHTIP_ENABLE_MCP`), reads the repo at the event's release tag, and raises or updates a GitHub issue labelled `error-triage`: what broke, the likely cause, where in the code, a suggested fix and severity. It dedupes by writing the GlitchTip issue ID into the GitHub issue, and posts one short daily summary (or nothing).
+  - **Guardrails:** read-only on GlitchTip and the repo; writes GitHub issues only (a draft PR at most, later); never merges or deploys. Error text is untrusted input (prompt injection), which is why the tools stay limited.
+  - **Later:** a real-time path for critical alerts via a GlitchTip webhook → n8n (already in the stack) → `repository_dispatch`.
+  - Makes sense once compliance is live and producing real errors. Details: v0.1-08a (GlitchTip setup).
+
 - **Granular and aggregate model** alongside org-and-decompose (user, 2026-09-25: "in time we should be able to run both models")
 - Register access control and capabilities (fitness 04; blocked on auth#20, hub#22)
 - Screener tuning continues as sertantai-legal#161 lands (the v0.1 accuracy loop, session 06, carries on)

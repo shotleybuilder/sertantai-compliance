@@ -1,12 +1,14 @@
 ---
 session: "v0.1-08a: Monitoring & Error Tracking"
-status: pending
+status: active
 opened: 2026-09-25
 parent: v0.1/meta.md
 depends_on: ["v0.1/08-prod-hardening"]
 ---
 
-# Session: Monitoring & Error Tracking (PENDING)
+# Session: Monitoring & Error Tracking (ACTIVE)
+
+> Resumed 2026-09-26: v0.1 is blocked on legal for the deploy, so we build the pre-deploy instrumentation now. User chose **self-hosted GlitchTip** (EU data residency, easier to explain to QQ; same Sentry SDKs, so switching later only changes the DSN).
 
 ## Problem
 
@@ -18,8 +20,12 @@ Split out of v0.1-08 (user, 2026-09-25). Prod has backups and a security fix wai
 
 ### Now (pre-deploy code)
 
-- ⬜ Error-tracking SDK in the backend (Phoenix and Oban exceptions) and the frontend (JS errors): PII and token scrubbing, the release version on every event, and a DSN from the environment, off when it's unset. First choose the backend: self-hosted GlitchTip in the stack, or Sentry SaaS.
-- ⬜ `ChangeDetectionWorker` failures reach the error tracker, not just the logs
+- ✅ Error-tracking SDKs (`c5ffd7c`): the backend (sentry 13.5: crashes, Logger.error, Phoenix) and the frontend (@sentry/svelte 11). Scrubbed, release-tagged, off without a DSN. Details below.
+- ✅ `ChangeDetectionWorker` failures reach the error tracker (the Oban integration, `capture_errors`; mutation-checked test)
+- ✅ GlitchTip in sertantai-stack (`6273acc`, local): 6.2.6, all-in-one, shared_postgres, errors.sertantai.com; setup in `docker/glitchtip/README.md`
+- ✅ **Found and fixed:** prod nginx can't reload (`nginx -t` fails: host not found for the stopped compliance/legal). Stack `0fb2f2d` (local) resolves upstreams at runtime
+- ⬜ Server: apply `0fb2f2d` (pull, `nginx -t`, reload); DNS for `errors.sertantai.com`; cert; apply `6273acc`; DB, superuser, projects, DSNs (see the README)
+- ⬜ Put the frontend DSN in `frontend/.env.production` and the backend DSN in the server `.env`; do this before rc.1 is built
 - ⬜ Success pings for backups: `backup.sh` and `sertantai-nas-pull.sh` hit a push-monitor URL taken from the environment (stack side)
 
 ### After the deploy (operational)
@@ -42,3 +48,18 @@ Split out of v0.1-08 (user, 2026-09-25). Prod has backups and a security fix wai
 - `uptime-kuma` (`louislam/uptime-kuma:2`), `status.sertantai.com`
 - `beszel` + `beszel-agent`, `monitor.sertantai.com`
 - No error tracker yet.
+
+## Error tracking (2026-09-26)
+
+- **Backend** (`SertantaiComplianceWeb.ErrorTracking`, endpoint, AuthPlug, `application.ex`):
+  - reports go through `Sentry.PlugContext`, with custom scrubbers for token-like params, auth headers, cookies, client IP and **X-Forwarded-For**;
+  - the user context is the pseudonymous user ID plus an org tag, cleared at the start of each request, because Bandit reuses a process across keep-alive requests;
+  - `Sentry.LoggerHandler` catches crashes and Logger.error (under Bandit, request crashes arrive via the logger) and is rate-limited;
+  - `SENTRY_DSN` and `SENTRY_ENVIRONMENT` are set at runtime; the release comes from mix.exs.
+- **Frontend** (`$lib/errorTracking`, `hooks.client.ts`):
+  - `handleError` catches load and navigation errors;
+  - `dataCollection` turns off user info, cookies, headers and bodies;
+  - the `/auth/callback?token=` is masked in URLs and breadcrumbs;
+  - the DSN is build-time `VITE_SENTRY_DSN` in `.env.production` (public by design), because the images are built locally per release.
+- **Tests:** the scrubbing tests caught the X-Forwarded-For leak. The Oban test fails when `capture_errors` is off.
+- **Not done:** source-map upload for readable frontend stack traces (sentry-cli against GlitchTip), and GlitchTip backups (it holds 90-day operational data only).

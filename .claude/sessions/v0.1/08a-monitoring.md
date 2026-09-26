@@ -22,9 +22,11 @@ Split out of v0.1-08 (user, 2026-09-25). Prod has backups and a security fix wai
 
 - ✅ Error-tracking SDKs (`c5ffd7c`): the backend (sentry 13.5: crashes, Logger.error, Phoenix) and the frontend (@sentry/svelte 11). Scrubbed, release-tagged, off without a DSN. Details below.
 - ✅ `ChangeDetectionWorker` failures reach the error tracker (the Oban integration, `capture_errors`; mutation-checked test)
-- ✅ GlitchTip in sertantai-stack (`6273acc`, local): 6.2.6, all-in-one, shared_postgres, errors.sertantai.com; setup in `docker/glitchtip/README.md`
-- ✅ **Found and fixed:** prod nginx can't reload (`nginx -t` fails: host not found for the stopped compliance/legal). Stack `0fb2f2d` (local) resolves upstreams at runtime
-- ⬜ Server: apply `0fb2f2d` (pull, `nginx -t`, reload); DNS for `errors.sertantai.com`; cert; apply `6273acc`; DB, superuser, projects, DSNs (see the README)
+- ✅ GlitchTip in sertantai-stack (`b3636e3`, `050195b`): 6.2.6, all-in-one, 122 MB, `glitchtip` DB in shared_postgres, https://errors.sertantai.com (Let's Encrypt, HSTS). **Stopped until the admin user exists** (sign-up is open while there are 0 users)
+- ✅ **Found and fixed:** prod nginx couldn't reload (`nginx -t` failed on the stopped compliance/legal). Stack `7f692f9` resolves upstreams at runtime; live on 2026-09-26, which also finally loaded `7975ecb`
+- ✅ **Found and fixed:** cert renewal could never be automatic (standalone needs port 80), and the ssl scripts' `docker compose start nginx` also starts stopped dependencies. Stack `111d381`: webroot (`00-http.conf`), a deploy hook, and no nginx stops. All 12 certs pass `certbot renew --dry-run`. Documented in stack `scripts/README.md`
+- ⬜ GlitchTip admin (`createsuperuser`), then start it, confirm sign-up is closed, create the org, the 2 projects and alert rules
+- ⬜ Resend API key → `GLITCHTIP_EMAIL_URL` in the server `.env` (alert emails)
 - ⬜ Put the frontend DSN in `frontend/.env.production` and the backend DSN in the server `.env`; do this before rc.1 is built
 - ⬜ Success pings for backups: `backup.sh` and `sertantai-nas-pull.sh` hit a push-monitor URL taken from the environment (stack side)
 

@@ -66,6 +66,11 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  # Error tracking (GlitchTip). Unset DSN = disabled.
+  config :sentry,
+    dsn: System.get_env("SENTRY_DSN"),
+    environment_name: System.get_env("SENTRY_ENVIRONMENT") || "production"
+
   # ElectricSQL sync service
   config :sertantai_compliance,
     electric_url: System.get_env("ELECTRIC_URL"),

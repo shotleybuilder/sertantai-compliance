@@ -51,6 +51,7 @@
 		"@electric-sql/client": "^1.5.26",
 		"@electric-sql/pglite": "^0.5.5",
 		"@electric-sql/pglite-sync": "^0.6.6",
+		"@sentry/svelte": "^11.0.0",
 		"@shotleybuilder/gridlite-adapter-pglite": "^0.7.1",
 		"@shotleybuilder/svelte-gridlite-kit": "^0.7.1",
 		"@shotleybuilder/svelte-gridlite-views": "^0.2.1",

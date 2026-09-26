@@ -33,3 +33,6 @@ config :sertantai_compliance, vocabulary_cache_ttl_ms: 0
 
 # Jobs are only run when a test asks (Oban.Testing).
 config :sertantai_compliance, Oban, testing: :manual
+
+# Never report errors from tests, even if SENTRY_DSN is set in the shell.
+config :sentry, dsn: nil, test_mode: true

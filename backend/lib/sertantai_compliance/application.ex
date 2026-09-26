@@ -7,6 +7,17 @@ defmodule SertantaiCompliance.Application do
 
   @impl true
   def start(_type, _args) do
+    # Crashes (including request errors under Bandit) and Logger.error calls
+    # go to GlitchTip. It does nothing when no DSN is configured.
+    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
+      config: %{
+        metadata: [:request_id],
+        capture_log_messages: true,
+        level: :error,
+        rate_limiting: [max_events: 10, interval: 1_000]
+      }
+    })
+
     children = [
       SertantaiComplianceWeb.Telemetry,
       SertantaiCompliance.Repo,

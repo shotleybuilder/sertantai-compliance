@@ -27,6 +27,10 @@ defmodule SertantaiComplianceWeb.AuthPlug do
   def call(conn, _opts) do
     case authenticate(conn) do
       {:ok, auth} ->
+        # Error reports carry pseudonymous IDs only, never the email.
+        Sentry.Context.set_user_context(%{id: auth.user_id})
+        Sentry.Context.set_tags_context(%{organization_id: auth.organization_id})
+
         conn
         |> assign(:current_user_id, auth.user_id)
         |> assign(:organization_id, auth.organization_id)

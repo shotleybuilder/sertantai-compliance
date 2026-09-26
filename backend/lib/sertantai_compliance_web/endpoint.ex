@@ -46,6 +46,12 @@ defmodule SertantaiComplianceWeb.Endpoint do
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
 
+  # Error reports (GlitchTip) get scrubbed request data. Bandit reuses a
+  # process across keep-alive requests, so the previous request's context
+  # (user, org) is cleared first.
+  plug :clear_error_context
+  plug Sentry.PlugContext, SertantaiComplianceWeb.ErrorTracking.plug_context_opts()
+
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
@@ -67,4 +73,9 @@ defmodule SertantaiComplianceWeb.Endpoint do
     max_age: 600
 
   plug SertantaiComplianceWeb.Router
+
+  defp clear_error_context(conn, _opts) do
+    Sentry.Context.clear_all()
+    conn
+  end
 end

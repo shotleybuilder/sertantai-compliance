@@ -50,6 +50,8 @@ defmodule SertantaiCompliance.MixProject do
 
       # Job queue
       {:oban, "~> 2.18"},
+      {:sentry, "~> 13.5"},
+      {:bypass, "~> 2.1", only: :test},
 
       # Ash Framework
       {:ash, "~> 3.22"},

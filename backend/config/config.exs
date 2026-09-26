@@ -21,6 +21,12 @@ config :sertantai_compliance, Oban,
      crontab: [{"0 5 * * *", SertantaiCompliance.Sync.Workers.ChangeDetectionWorker}]}
   ]
 
+# Error tracking: GlitchTip (Sentry-compatible). Off unless SENTRY_DSN is set
+# (prod, see runtime.exs). Every event is tagged with the release version.
+config :sentry,
+  release: Mix.Project.config()[:version],
+  integrations: [oban: [capture_errors: true]]
+
 config :sertantai_compliance,
   ecto_repos: [SertantaiCompliance.Repo],
   ash_domains: [SertantaiCompliance.Api, SertantaiCompliance.Sync],

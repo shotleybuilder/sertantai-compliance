@@ -57,3 +57,8 @@ into a versioned section. See `docs/RELEASING.md`.
 ### Security
 
 - Updated the Ash framework to address a published advisory.
+- Errors in the app and in the daily change check are reported to our own
+  error tracker, hosted on our servers in the EU, so we hear about problems
+  before you do. Reports include no passwords, sign-in tokens, cookies or IP
+  addresses. Users are identified only by an internal ID, never by name or
+  email.

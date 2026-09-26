@@ -13,6 +13,8 @@ defmodule SertantaiComplianceWeb.ElectricProxyController do
   """
   use SertantaiComplianceWeb, :controller
 
+  alias SertantaiComplianceWeb.AuthPlug
+
   require Logger
 
   # Client-safe params that pass through to Electric unchanged.
@@ -75,8 +77,9 @@ defmodule SertantaiComplianceWeb.ElectricProxyController do
       # Org tables: deleting a shape forces a resync, so require the same
       # Gatekeeper validation as reading it.
       table in @allowed_tables ->
-        with [bearer | _] <- Plug.Conn.get_req_header(conn, "authorization"),
-             {:ok, _shape} <- validate_with_gatekeeper(params, bearer) do
+        with {:ok, %{organization_id: org_id}} <- AuthPlug.authenticate(conn),
+             [bearer | _] <- Plug.Conn.get_req_header(conn, "authorization"),
+             {:ok, _shape} <- validate_with_gatekeeper(org_scoped_params(params, org_id), bearer) do
           do_delete_shape(conn, params)
         else
           {:error, status, body} -> conn |> put_status(status) |> json(body)
@@ -162,22 +165,37 @@ defmodule SertantaiComplianceWeb.ElectricProxyController do
 
   # --- Gatekeeper-validated shapes (auth required) ---
 
+  # Org tables: the organisation filter is built HERE from the locally verified
+  # token, never taken from the client. The auth Gatekeeper still authorises
+  # the table and role, but its org check is a substring match that passes
+  # e.g. "organization_id = '<mine>' OR true" and returns the client's where
+  # unchanged (sertantai-auth ShapePolicies), so compliance must not rely on it.
   defp forward_gatekeeper_shape(conn, params) do
-    auth_header = Plug.Conn.get_req_header(conn, "authorization")
-
-    case auth_header do
-      [bearer | _] when is_binary(bearer) ->
-        case validate_with_gatekeeper(params, bearer) do
-          {:ok, validated_shape} ->
-            forward_validated_shape(conn, validated_shape, params)
-
-          {:error, status, body} ->
-            conn |> put_status(status) |> json(body)
-        end
+    with {:ok, %{organization_id: org_id}} <- AuthPlug.authenticate(conn),
+         [bearer | _] <- Plug.Conn.get_req_header(conn, "authorization"),
+         scoped = org_scoped_params(params, org_id),
+         {:ok, _validated} <- validate_with_gatekeeper(scoped, bearer) do
+      forward_validated_shape(
+        conn,
+        %{"table" => scoped["table"], "where" => scoped["where"]},
+        scoped
+      )
+    else
+      {:error, status, body} when is_integer(status) ->
+        conn |> put_status(status) |> json(body)
 
       _ ->
         conn |> put_status(401) |> json(%{error: "Authentication required"})
     end
+  end
+
+  # Replace any client where with exactly the verified org, and drop subset__*
+  # params (they add client-supplied filters). org_id is a cast UUID, so
+  # interpolating it is safe.
+  defp org_scoped_params(params, org_id) do
+    params
+    |> Map.put("where", "organization_id = '#{org_id}'")
+    |> Map.drop(~w(subset__where subset__params subset__limit subset__offset subset__order_by))
   end
 
   defp validate_with_gatekeeper(params, auth_header) do

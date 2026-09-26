@@ -25,21 +25,36 @@ defmodule SertantaiComplianceWeb.AuthPlug do
 
   @impl true
   def call(conn, _opts) do
-    with {:ok, token} <- extract_token(conn),
-         {:ok, claims} <- verify_token(token),
-         {:ok, user_id} <- extract_user_id(claims),
-         {:ok, org_id} <- extract_org_id(claims) do
-      conn
-      |> assign(:current_user_id, user_id)
-      |> assign(:organization_id, org_id)
-      |> assign(:user_role, claims["role"])
-      |> assign(:jwt_claims, claims)
-    else
+    case authenticate(conn) do
+      {:ok, auth} ->
+        conn
+        |> assign(:current_user_id, auth.user_id)
+        |> assign(:organization_id, auth.organization_id)
+        |> assign(:user_role, auth.claims["role"])
+        |> assign(:jwt_claims, auth.claims)
+
       {:error, reason} ->
         conn
         |> put_resp_content_type("application/json")
         |> send_resp(401, Jason.encode!(%{error: "Unauthorized", reason: reason}))
         |> halt()
+    end
+  end
+
+  @doc """
+  Verify the request's Bearer token without touching the conn. Used by the
+  plug and by routes outside the `:auth` pipeline (the Electric proxy), which
+  need the verified organisation to scope shapes themselves.
+  """
+  @spec authenticate(Plug.Conn.t()) ::
+          {:ok, %{user_id: String.t(), organization_id: String.t(), claims: map()}}
+          | {:error, String.t()}
+  def authenticate(conn) do
+    with {:ok, token} <- extract_token(conn),
+         {:ok, claims} <- verify_token(token),
+         {:ok, user_id} <- extract_user_id(claims),
+         {:ok, org_id} <- extract_org_id(claims) do
+      {:ok, %{user_id: user_id, organization_id: org_id, claims: claims}}
     end
   end
 

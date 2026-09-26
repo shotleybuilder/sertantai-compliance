@@ -37,6 +37,9 @@ decisions:
   - what: v0.1 is deploy and operate only; development leftovers move to a new v0.2 backlog
     why: User decision; all remaining v0.1 work depends on the prod deploy, which is blocked on legal
     result: v0.1 meta scope rule; v0.2 meta and milestone; #20, #22 and #23 moved
+  - what: Agent error triage (GlitchTip → an agent → GitHub issues) goes in the v0.2 backlog, not v0.1
+    why: "User: \"I'm pretty rubbish at monitoring emails\". GitHub issues are the inbox actually used. It needs real prod errors to be worth building."
+    result: "v0.2 meta: a daily scheduled agent, read-only, raising issues labelled error-triage, with dedupe by GlitchTip issue ID"
 
 metrics:
   tests: { backend: 106, frontend: 142 }
@@ -94,6 +97,7 @@ depends_on:
 enables:
   - "v0.1-09 RC and pilot: errors from QQ users reach a human"
   - Automatic cert renewal before the 3 Nov expiry
+  - "v0.2 agent error triage (GlitchTip API/MCP → GitHub issues)"
 ---
 
 # Session: Monitoring & Error Tracking (SUSPENDED)

@@ -75,7 +75,7 @@ cd ~/Desktop/sertantai-legal && docker compose -f docker-compose.dev.yml up -d p
 ./scripts/development/dev-stop
 ```
 
-**Signing in locally:** sign in at the hub (http://localhost:5173), then click its **Controls** tile. In dev it points at :5176 and hands the token to compliance's `/auth/callback`. (There is no Compliance tile yet; that's a session 08 item.) The QQ dev user is `jason.woodruff@qinetiq.com`, org `c075d56b-8420-4408-b695-ccfbc1ba15ec`.
+**Signing in locally:** sign in at the hub (http://localhost:5173), then click its **Compliance** tile. In dev it points at :5176 and hands the token to compliance's `/auth/callback`. The QQ dev user is `jason.woodruff@qinetiq.com`, org `c075d56b-8420-4408-b695-ccfbc1ba15ec`.
 
 | Service | Port |
 |---|---|

@@ -25,8 +25,11 @@ Split out of v0.1-08 (user, 2026-09-25). Prod has backups and a security fix wai
 - ✅ GlitchTip in sertantai-stack (`b3636e3`, `050195b`): 6.2.6, all-in-one, 122 MB, `glitchtip` DB in shared_postgres, https://errors.sertantai.com (Let's Encrypt, HSTS). **Stopped until the admin user exists** (sign-up is open while there are 0 users)
 - ✅ **Found and fixed:** prod nginx couldn't reload (`nginx -t` failed on the stopped compliance/legal). Stack `7f692f9` resolves upstreams at runtime; live on 2026-09-26, which also finally loaded `7975ecb`
 - ✅ **Found and fixed:** cert renewal could never be automatic (standalone needs port 80), and the ssl scripts' `docker compose start nginx` also starts stopped dependencies. Stack `111d381`: webroot (`00-http.conf`), a deploy hook, and no nginx stops. All 12 certs pass `certbot renew --dry-run`. Documented in stack `scripts/README.md`
-- ⬜ GlitchTip admin (`createsuperuser`), then start it, confirm sign-up is closed, create the org, the 2 projects and alert rules
-- ⬜ Resend API key → `GLITCHTIP_EMAIL_URL` in the server `.env` (alert emails)
+- ✅ GlitchTip admin created; running; sign-up confirmed closed. Org `sertantai`, projects `compliance-backend` (1) and `compliance-frontend` (2); a test event from each arrived
+- ✅ DSNs: backend in the server `.env` (`SERTANTAI_COMPLIANCE_SENTRY_DSN`), frontend in `frontend/.env.production` (`4992398`)
+- ✅ Alert email: its own Resend key (`GLITCHTIP_RESEND_API_KEY`), SMTP on **587** (Hetzner blocks outbound 465 and 25); a test email was sent
+- ⬜ Rotate that Resend key (it was printed in the session transcript by a masking bug on 2026-09-26), then put the new key in the server `.env` and run `up -d --no-deps glitchtip`
+- ⬜ Alert rules in GlitchTip (new issue → email; backend: >10 events/h)
 - ⬜ Put the frontend DSN in `frontend/.env.production` and the backend DSN in the server `.env`; do this before rc.1 is built
 - ⬜ Success pings for backups: `backup.sh` and `sertantai-nas-pull.sh` hit a push-monitor URL taken from the environment (stack side)
 

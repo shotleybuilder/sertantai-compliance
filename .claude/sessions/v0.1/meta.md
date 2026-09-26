@@ -25,7 +25,7 @@ What stays in v0.1:
 | Operate | 08a: monitors, alerts, backup freshness, error tracking | 03 (see exception) |
 | Operate | 06: weekly benchmark as legal data lands | legal#161 |
 | Pilot and release | 09 RC and pilot, 10 release; after the freeze, fixes only | 03 |
-| Upstream | sertantai-auth#21: role lists, before non-owner QQ users sign in | auth |
+| Upstream | ~~sertantai-auth#21: role lists~~ fixed and deployed 2026-09-26. **sertantai-auth#22: 21 dependency advisories (1 critical: OAuth account takeover), before QQ pilot users sign in** | auth |
 
 **Two narrow exceptions**, because they are pre-deploy code that is useless if it misses the release:
 - **08a instrumentation:** the error-tracking SDK (backend and frontend) and reporting of Oban job failures. It has to be in the image that gets deployed. Do it now, while blocked. Wiring the monitors and alerts is operational and happens after the deploy.
@@ -84,4 +84,6 @@ Sessions 01, 03 and 04 can run in parallel in week 0.
 - sertantai-legal#133: partition migration to prod
 - sertantai-legal#27: dev→prod data sync
 - sertantai-legal#106: shared PGLite IDB across users (check compliance too)
-- sertantai-auth#21: Gatekeeper role lists (security side covered by compliance `657d6a2`)
+- sertantai-auth#21: Gatekeeper org scoping and role lists (fixed and deployed 2026-09-26, `a39a54f`)
+- sertantai-auth#22: dependency advisories (1 critical); before the QQ pilot
+- sertantai-stack#2: public JWKS URL returns 404 (no current impact)

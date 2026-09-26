@@ -37,6 +37,8 @@ Even after the migration, prod data won't have the July enrichment unless the de
   - the browse, glossary and screening pages load;
   - Electric shapes sync;
   - the evaluator returns matches for the QQ profile.
+  - **sign-in end to end:** hub (https://sertantai.com) with a password (and GitHub, if used) → Compliance tile → `/auth/callback` → the register syncs. This is the first real test of auth after sertantai-auth#21/#22, deployed 2026-09-26: Ash 3.33, AshAuthentication 4.15, the Gatekeeper fix. Rollback image: `rollback-pre-4654459`;
+  - a non-owner QQ user (admin, member or viewer) can sync `org_applicabilities` (auth#21's role fix).
 - ⬜ Document the **recurring** dev→prod data push (monthly scrape → prod). The change pipeline (session 05) depends on it.
 - ⬜ If #133 stalls, use the stopgap: rewrite `legal_register`→`uk_lrt` in the compliance Electric proxy. Only as a temporary measure.
 

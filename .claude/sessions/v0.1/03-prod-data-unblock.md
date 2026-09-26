@@ -22,8 +22,8 @@ Even after the migration, prod data won't have the July enrichment unless the de
 
 ## Todo
 
-- ⬜ Use `~/Desktop/sertantai-stack/scripts/backup.sh` (and check `restore.sh` works) for the prod DB backup
-- ⬜ **Back up the prod DB** before anything else. Record where the backup is stored.
+- ✅ Prod DB backups: the restic `backup` container in the stack runs daily with a monthly drill (session 08; see `sertantai-stack/docker/backup/README.md`). The stack's `scripts/backup.sh` is Baserow-only.
+- ⬜ **Back up the prod DB** before anything else: `docker compose exec backup /backup/backup.sh`, then note the snapshot ID.
 - ⬜ legal#133: run the 5 migrations in order:
   1. `20260518000001_partition_legal_register`
   2. `20260518230001_create_au_partition`

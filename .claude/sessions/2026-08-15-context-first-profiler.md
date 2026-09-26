@@ -2,8 +2,8 @@
 session: Context-First Profiler
 status: pending
 opened: 2026-08-15
-parent: v0.1/meta.md
-gate: "v0.1 stretch — go/no-go 2026-10-10 (accuracy loop on track + change pipeline wired)"
+parent: v0.2/meta.md
+gate: "moved out of v0.1 on 2026-09-26 (v0.1 is deploy and operate only)"
 depends_on:
   - 2026-08-15-actor-wizard-labels.md
 ---

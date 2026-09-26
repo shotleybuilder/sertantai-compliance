@@ -1,6 +1,7 @@
 ---
 session: "v0.1-04a: Profile Vocabulary & API"
-status: suspended
+status: closed
+closed: 2026-09-26
 opened: 2026-09-25
 suspended: 2026-09-25
 outcome: partial
@@ -111,8 +112,8 @@ Taken together, QQ's profile barely touches the trees.
 - ✅ Wire the wizard's conditional-question checkboxes to `conditions` (saved via PATCH)
 - ✅ Ash actions as the API foundation (MCP-ready for `ash_ai` in v0.2): `:upsert` (replace), `:patch`, generic `:vocabulary` and `:check` actions with AI-oriented descriptions; `Fitness.ProfileCheck`
 - ✅ REST: `PUT /profile` (replace, all fields), `PATCH /profile`, `POST /profile/check`, `GET /vocabulary` + `about`/`fields`/`dimensions`; unknown values stored with `warnings`, `?strict=true` rejects (422); wizard saves via PATCH so API-only fields survive
-- ⬜ OpenAPI spec for the profile + evaluate endpoints
-- ⬜ Wizard uses the corpus vocabulary instead of hard-coded lists
+- ➡️ OpenAPI spec for the profile + evaluate endpoints (moved to v0.2, 2026-09-26)
+- ➡️ Wizard uses the corpus vocabulary instead of hard-coded lists (moved to v0.2, 2026-09-26)
 - ✅ Built QQ's reviewed profile **via the API** (dogfood as an AI client) from independent QQ evidence, not from its legacy register; user corrects it
 - ✅ Tests: Vocabulary (normalise/route/suggest), profile_from_screening/2 routing, profile API (PUT/PATCH/check/strict/vocabulary): 64 passing
 
@@ -212,3 +213,5 @@ Key choices:
 - **Adding `construction` lowers matches.** `construction` sits beside `interpretation` in trees (statutory "construction", i.e. interpretation), and appears to feed `Not` (disapplies) nodes. That's a word-sense error in legal's extraction.
 
 Per-law cause attribution belongs to the benchmark (session 04). The tree-quality findings go to sertantai-legal#161.
+
+> **Closed 2026-09-26** under the v0.1 scope rule (v0.1 is deploy and operate only). The API is usable as it is; the OpenAPI spec and the wizard's switch to the corpus vocabulary move to [v0.2](../v0.2/meta.md).

@@ -2,6 +2,7 @@
 session: Svelte 5 + GridLite 0.10 + Vite 8 Upgrade
 status: pending
 opened: 2026-09-25
+parent: v0.2/meta.md
 depends_on:
   - v0.1/10-release.md
 ---

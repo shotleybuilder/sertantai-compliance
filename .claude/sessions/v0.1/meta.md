@@ -53,7 +53,7 @@ they are resumed.
 | 6 | [Accuracy Iteration Loop](./06-accuracy-loop.md) | pending | 4 | 1–3 | Weekly benchmark, legal-side fixes, recall ≥95% |
 | 7 | [Context-First Profiler](../2026-08-15-context-first-profiler.md) | **moved to v0.2** | — | — | Contextual actor vocabulary |
 | 8 | [Production Hardening](./08-prod-hardening.md) | **closed** | 3 | 3 | Per-user IDB, real-user auth, backups, monitoring |
-| 8a | [Monitoring & Error Tracking](./08a-monitoring.md) | pending (instrumentation now; wiring after deploy) | 8 | 1–3 | Uptime Kuma/Beszel wiring, backup freshness alerts, error tracking, performance baseline |
+| 8a | [Monitoring & Error Tracking](./08a-monitoring.md) | suspended (instrumentation + GlitchTip done; wiring after deploy) | 8 | 1–3 | Uptime Kuma/Beszel wiring, backup freshness alerts, error tracking, performance baseline |
 | 9 | [RC & QQ Pilot](./09-rc-pilot.md) | pending | 2, 5, 6, 8 | 3–4 | v0.1.0-rc.1 in prod ~17 Oct, UAT feedback |
 | 10 | [v0.1.0 Release](./10-release.md) | pending | 9 | 4 | Tag ~27 Oct, GitHub Release, QQ handover |
 

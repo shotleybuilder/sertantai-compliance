@@ -33,6 +33,8 @@ What stays in v0.1:
 
 Pilot bugs are fixed in v0.1 as rc.N. Anything else goes to **[v0.2](../v0.2/meta.md)**.
 
+**Branch (2026-09-27):** v0.1 code lives on **`release/0.1`**, cut from `main` at the end of v0.1 development. The rcs, v0.1.0 and any patches are tagged there. `main` is now v0.2. Every v0.1 code change, including the 03 stopgap and the 06 jurisdiction gate, is committed to `release/0.1` and then merged forward into `main`. This file and the other session docs are still edited on `main`. See `docs/RELEASING.md`, under "Branches".
+
 **Decision date: 10 Oct** (replaces the context-first go/no-go). If legal#133/#27 aren't on track for rc.1 by 17 Oct, decide the fallback with legal: ship on the partitioned table with partial data, or use the 03 stopgap (the proxy rewrites `legal_register` to `uk_lrt`).
 
 ## Implementation Sessions

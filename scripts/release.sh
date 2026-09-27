@@ -7,10 +7,14 @@
 # Usage:
 #   ./scripts/release.sh X.Y.Z            # final release
 #   ./scripts/release.sh X.Y.Z-rc.N       # release candidate
-#   ./scripts/release.sh X.Y.Z --any-branch   # rehearsal off main (then delete)
+#   ./scripts/release.sh X.Y.Z --any-branch   # rehearsal on a throwaway branch (then delete)
+#
+# Releases of X.Y are cut from release/X.Y once that branch exists, otherwise
+# from main (see "Branches" in docs/RELEASING.md).
 #
 # What it does:
-#   1. Refuses unless: valid SemVer, clean tree, on main (unless --any-branch),
+#   1. Refuses unless: valid SemVer, clean tree, on the right branch (release/X.Y,
+#      or main while release/X.Y doesn't exist; --any-branch skips this),
 #      tag vX.Y.Z doesn't exist, and (final releases) CHANGELOG has Unreleased notes
 #   2. Prints commits since the previous tag, as raw material for the changelog
 #   3. Sets the version in backend/mix.exs and frontend/package.json (+ lockfile)
@@ -48,8 +52,18 @@ IS_RC=false; [[ "$VERSION" == *-rc.* ]] && IS_RC=true
 [ -z "$(git status --porcelain)" ] || die "working tree not clean; commit or stash first"
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-if [ "$BRANCH" != "main" ] && [ "$ANY_BRANCH" = false ]; then
-    die "releases are cut from main (on '$BRANCH'); use --any-branch only to rehearse"
+BASE="${VERSION%%-*}"                    # 0.1.2-rc.1 -> 0.1.2
+LINE="${BASE%.*}"                        # 0.1.2 -> 0.1
+RELEASE_BRANCH="release/$LINE"
+if [ "$ANY_BRANCH" = false ]; then
+    if [ "$BRANCH" = "main" ]; then
+        if git rev-parse -q --verify "refs/heads/$RELEASE_BRANCH" >/dev/null \
+            || git rev-parse -q --verify "refs/remotes/origin/$RELEASE_BRANCH" >/dev/null; then
+            die "$RELEASE_BRANCH exists, so $LINE releases are cut from it, not main"
+        fi
+    elif [ "$BRANCH" != "$RELEASE_BRANCH" ]; then
+        die "$VERSION is cut from $RELEASE_BRANCH (or main before that branch exists), not '$BRANCH'; use --any-branch only to rehearse"
+    fi
 fi
 
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && die "tag $TAG already exists"

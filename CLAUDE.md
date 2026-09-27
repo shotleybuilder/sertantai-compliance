@@ -16,6 +16,8 @@ which UK laws apply to it (the **screener**), keeps it abreast of **legal change
 
 v0.1 ships to QQ (QinetiQ) by 27 Oct 2026; their ENHESA register ends 31 Oct.
 Plan: `.claude/plans/v0.1-release.md`. Sessions and status: `.claude/sessions/v0.1/meta.md`.
+v0.1 is deploy and operate only, on `release/0.1`. **v0.2 development is on
+`main`**: roadmap and sessions in `.claude/sessions/v0.2/meta.md`.
 Legal-side data work: sertantai-legal#161.
 
 ## Architecture essentials
@@ -108,6 +110,13 @@ npm run dev | npm run check | npm run lint | npm run format | npm run test:run |
 
 ## Releases and production
 
+- **Branches:** `main` is the trunk for the next version (**v0.2** now). A
+  version line that is feature-complete gets a `release/X.Y` branch, and its
+  tags are cut there. **`release/0.1`** takes only v0.1 rc and pilot fixes and
+  the exceptions its meta allows. Fix on the release branch, then merge it
+  forward into `main` (`git merge --no-ff release/0.1`); never merge `main`
+  into it. Edit `.claude/` docs on `main` only. Details: `docs/RELEASING.md`,
+  under "Branches".
 - Every prod deploy is a tagged, version-pinned release: `docs/RELEASING.md`.
 - `scripts/release.sh X.Y.Z[-rc.N]` bumps `backend/mix.exs` and `frontend/package.json` together (CI checks they match), updates `CHANGELOG.md` and tags.
 - `scripts/deployment/deploy-prod.sh --version X.Y.Z`: backs up `sertantai_legal_prod` before backend deploys (the backend migrates on start), pins `SERTANTAI_COMPLIANCE_VERSION` in the server `.env`, logs the deploy and checks `/health`. It never deploys `latest`.

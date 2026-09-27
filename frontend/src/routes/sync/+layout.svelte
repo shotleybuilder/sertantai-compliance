@@ -1,16 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { adminAuth, type AuthUser } from '$lib/stores/auth';
+	interface Props {
+		children?: import('svelte').Snippet;
+	}
+
+	let { children }: Props = $props();
 
 	const HUB_URL = import.meta.env.VITE_HUB_URL || 'http://localhost:5173';
 
 	const navItems = [{ href: '/sync', label: 'Sync', exact: false }];
 
-	$: pathname = $page.url.pathname;
+	let pathname = $derived(page.url.pathname);
 
-	let loading = true;
-	let user: AuthUser | null = null;
+	let loading = $state(true);
+	let user = $state<AuthUser | null>(null);
 
 	adminAuth.subscribe((v) => (user = v));
 
@@ -74,7 +79,7 @@
 					<div class="flex items-center gap-3">
 						<span class="text-sm text-gray-600">{user.name || user.email}</span>
 						<span class="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">{user.role}</span>
-						<button on:click={signOut} class="text-sm text-gray-400 hover:text-gray-600">
+						<button onclick={signOut} class="text-sm text-gray-400 hover:text-gray-600">
 							Sign out
 						</button>
 					</div>
@@ -83,7 +88,7 @@
 		</nav>
 
 		<main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-			<slot />
+			{@render children?.()}
 		</main>
 	</div>
 {/if}

@@ -1,7 +1,5 @@
 <script lang="ts">
 	import '../app.css';
-	import { QueryClientProvider } from '@tanstack/svelte-query';
-	import { queryClient } from '$lib/query/client';
 	import { browser } from '$app/environment';
 	import { adminAuth } from '$lib/stores/auth';
 	import type { Snippet } from 'svelte';
@@ -17,6 +15,4 @@
 	}
 </script>
 
-<QueryClientProvider client={queryClient}>
-	{@render children()}
-</QueryClientProvider>
+{@render children()}

@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { adminAuth } from '$lib/stores/auth';
 
-	let status: 'loading' | 'success' | 'error' = 'loading';
-	let errorMessage = '';
+	let status = $state<'loading' | 'success' | 'error'>('loading');
+	let errorMessage = $state('');
 	let dest = '/browse';
 
 	onMount(() => {
 		// Where to go after auth — defaults to /browse
-		dest = $page.url.searchParams.get('dest') || '/browse';
+		dest = page.url.searchParams.get('dest') || '/browse';
 
-		const error = $page.url.searchParams.get('error');
+		const error = page.url.searchParams.get('error');
 		if (error) {
 			status = 'error';
 			errorMessage = 'Authentication failed. Redirecting...';
@@ -20,7 +20,7 @@
 			return;
 		}
 
-		const token = $page.url.searchParams.get('token');
+		const token = page.url.searchParams.get('token');
 		if (!token) {
 			status = 'error';
 			errorMessage = 'No token received. Redirecting...';

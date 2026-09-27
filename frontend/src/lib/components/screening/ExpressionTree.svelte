@@ -1,11 +1,16 @@
 <script lang="ts">
+	import ExpressionTree from './ExpressionTree.svelte';
 	import type { ApplicabilityNode } from '$lib/api/provisions';
 	import type { MatchReason } from '$lib/api/screening';
 	import { dimLabel } from '$lib/views/screener-results';
 
-	export let node: ApplicabilityNode;
-	export let depth: number = 0;
-	export let matchReasons: MatchReason[] = [];
+	interface Props {
+		node: ApplicabilityNode;
+		depth?: number;
+		matchReasons?: MatchReason[];
+	}
+
+	let { node, depth = 0, matchReasons = [] }: Props = $props();
 
 	// ── Match evaluation ────────────────────────────────────────
 
@@ -58,10 +63,10 @@
 		return false;
 	}
 
-	$: nodeResult = evaluateNode(node);
-	$: collapsed = shouldStartCollapsed(node, depth);
-	$: counts = node.op === 'And' || node.op === 'Or' ? childCounts(node) : null;
-	$: matched = node.op === 'Match' && isMatchNodeMatched(node);
+	let nodeResult = $derived(evaluateNode(node));
+	let collapsed = $derived(shouldStartCollapsed(node, depth));
+	let counts = $derived(node.op === 'And' || node.op === 'Or' ? childCounts(node) : null);
+	let matched = $derived(node.op === 'Match' && isMatchNodeMatched(node));
 
 	function toggle() {
 		collapsed = !collapsed;
@@ -115,8 +120,8 @@
 		<!-- Collapsible AND/OR node -->
 		<div
 			class="flex items-center gap-1.5 cursor-pointer select-none group"
-			on:click={toggle}
-			on:keydown={handleKeydown}
+			onclick={toggle}
+			onkeydown={handleKeydown}
 			role="treeitem"
 			aria-expanded={!collapsed}
 			aria-selected={nodeResult}
@@ -149,7 +154,7 @@
 		{#if !collapsed && node.children}
 			<div role="group">
 				{#each node.children as child}
-					<svelte:self node={child} depth={depth + 1} {matchReasons} />
+					<ExpressionTree node={child} depth={depth + 1} {matchReasons} />
 				{/each}
 			</div>
 		{/if}
@@ -163,25 +168,25 @@
 			{/if}
 		</div>
 		{#if node.inner}
-			<svelte:self node={node.inner} depth={depth + 1} {matchReasons} />
+			<ExpressionTree node={node.inner} depth={depth + 1} {matchReasons} />
 		{/if}
 	{:else if node.op === 'Conditional'}
 		<span class="font-semibold text-purple-600 uppercase text-[10px] tracking-wider">IF</span>
 		{#if node.condition}
-			<svelte:self node={node.condition} depth={depth + 1} {matchReasons} />
+			<ExpressionTree node={node.condition} depth={depth + 1} {matchReasons} />
 		{/if}
 		{#if node.then}
 			<div style="margin-left: {depth * 16}px">
 				<span class="font-semibold text-purple-500 uppercase text-[10px] tracking-wider">THEN</span>
 			</div>
-			<svelte:self node={node.then} depth={depth + 1} {matchReasons} />
+			<ExpressionTree node={node.then} depth={depth + 1} {matchReasons} />
 		{/if}
 	{:else if node.op === 'TimeWindow'}
 		<span class="font-semibold text-blue-500 uppercase text-[10px] tracking-wider">
 			TIME {node.from ?? '?'}–{node.to ?? 'now'}
 		</span>
 		{#if node.inner}
-			<svelte:self node={node.inner} depth={depth + 1} {matchReasons} />
+			<ExpressionTree node={node.inner} depth={depth + 1} {matchReasons} />
 		{/if}
 	{:else}
 		<span class="text-gray-400">{JSON.stringify(node)}</span>

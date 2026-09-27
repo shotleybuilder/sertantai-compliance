@@ -3,9 +3,13 @@
 	import type { MatchReason } from '$lib/api/screening';
 	import { dimLabel } from '$lib/views/screener-results';
 
-	export let tree: ApplicabilityNode;
-	export let matchReasons: MatchReason[] = [];
-	export let applies: boolean = true;
+	interface Props {
+		tree: ApplicabilityNode;
+		matchReasons?: MatchReason[];
+		applies?: boolean;
+	}
+
+	let { tree, matchReasons = [], applies = true }: Props = $props();
 
 	interface DimSummary {
 		dimension: string;
@@ -33,36 +37,40 @@
 		return dims;
 	}
 
-	$: matchedDims = new Set(matchReasons.map((r) => r.dimension));
-	$: matchedCodesByDim = (() => {
-		const m = new Map<string, string[]>();
-		for (const r of matchReasons) {
-			const existing = m.get(r.dimension) || [];
-			m.set(r.dimension, [...new Set([...existing, ...r.matched_codes])]);
-		}
-		return m;
-	})();
+	let matchedDims = $derived(new Set(matchReasons.map((r) => r.dimension)));
+	let matchedCodesByDim = $derived(
+		(() => {
+			const m = new Map<string, string[]>();
+			for (const r of matchReasons) {
+				const existing = m.get(r.dimension) || [];
+				m.set(r.dimension, [...new Set([...existing, ...r.matched_codes])]);
+			}
+			return m;
+		})()
+	);
 
-	$: allDims = collectMatches(tree);
-	$: summaries = (() => {
-		const result: DimSummary[] = [];
-		for (const [dim, codes] of allDims) {
-			const mc = matchedCodesByDim.get(dim) || [];
-			result.push({
-				dimension: dim,
-				label: dimLabel(dim),
-				codes: [...codes],
-				matchedCodes: mc,
-				matched: matchedDims.has(dim)
-			});
-		}
-		// Matched first, then unmatched
-		result.sort((a, b) => (a.matched === b.matched ? 0 : a.matched ? -1 : 1));
-		return result;
-	})();
+	let allDims = $derived(collectMatches(tree));
+	let summaries = $derived(
+		(() => {
+			const result: DimSummary[] = [];
+			for (const [dim, codes] of allDims) {
+				const mc = matchedCodesByDim.get(dim) || [];
+				result.push({
+					dimension: dim,
+					label: dimLabel(dim),
+					codes: [...codes],
+					matchedCodes: mc,
+					matched: matchedDims.has(dim)
+				});
+			}
+			// Matched first, then unmatched
+			result.sort((a, b) => (a.matched === b.matched ? 0 : a.matched ? -1 : 1));
+			return result;
+		})()
+	);
 
-	$: matchedCount = summaries.filter((s) => s.matched).length;
-	$: totalCount = summaries.length;
+	let matchedCount = $derived(summaries.filter((s) => s.matched).length);
+	let totalCount = $derived(summaries.length);
 </script>
 
 <div

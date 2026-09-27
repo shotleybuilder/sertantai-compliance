@@ -1,22 +1,17 @@
 <script lang="ts">
 	import { getDefinitions, type LegalDefinition } from '$lib/api/definitions';
 
-	export let term: string | null = null;
-	export let onClose: () => void = () => {};
-
-	let definitions: LegalDefinition[] = [];
-	let loading = false;
-	let error: string | null = null;
-	let lastTerm: string | null = null;
-
-	$: if (term && term !== lastTerm) {
-		loadDefinitions(term);
+	interface Props {
+		term?: string | null;
+		onClose?: () => void;
 	}
 
-	$: if (!term) {
-		definitions = [];
-		lastTerm = null;
-	}
+	let { term = null, onClose = () => {} }: Props = $props();
+
+	let definitions = $state<LegalDefinition[]>([]);
+	let loading = $state(false);
+	let error = $state<string | null>(null);
+	let lastTerm: string | null = null; // bookkeeping only, not rendered
 
 	async function loadDefinitions(t: string) {
 		loading = true;
@@ -36,15 +31,23 @@
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') onClose();
 	}
+	$effect(() => {
+		if (!term) {
+			definitions = [];
+			lastTerm = null;
+		} else if (term !== lastTerm) {
+			loadDefinitions(term);
+		}
+	});
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if term}
 	<!-- Backdrop -->
 	<button
 		class="fixed inset-0 z-40 bg-black/20 transition-opacity"
-		on:click={onClose}
+		onclick={onClose}
 		tabindex="-1"
 		aria-label="Close definition panel"
 	></button>
@@ -67,7 +70,7 @@
 				</p>
 			</div>
 			<button
-				on:click={onClose}
+				onclick={onClose}
 				aria-label="Close definition panel"
 				class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
 			>

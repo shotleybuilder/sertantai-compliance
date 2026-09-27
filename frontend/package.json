@@ -53,7 +53,6 @@
 		"@shotleybuilder/gridlite-adapter-pglite": "^0.8.0",
 		"@shotleybuilder/svelte-gridlite-kit": "^0.10.0",
 		"@shotleybuilder/svelte-gridlite-views": "^0.2.1",
-		"@tanstack/svelte-query": "^6.3.0",
 		"date-fns": "^4.1.0"
 	}
 }

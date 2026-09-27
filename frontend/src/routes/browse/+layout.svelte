@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
+	import type { Snippet } from 'svelte';
 
-	export let params: Record<string, string> = {}; // SvelteKit always passes this
-	$: void params;
+	let { children }: { children: Snippet } = $props();
 
 	const navItems = [{ href: '/browse', label: 'Browse Laws', exact: false }];
 
-	$: pathname = $page.url.pathname;
+	let pathname = $derived(page.url.pathname);
 
 	function isActive(currentPath: string, href: string, exact: boolean): boolean {
 		if (exact) return currentPath === href;
@@ -69,6 +69,6 @@
 
 	<!-- Main Content Area (flex-1 to fill remaining height) -->
 	<div class="flex-1 overflow-hidden">
-		<slot />
+		{@render children?.()}
 	</div>
 </div>

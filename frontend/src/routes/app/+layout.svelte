@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
+	import type { Snippet } from 'svelte';
 	import { adminAuth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
 	import { authFetch } from '$lib/api/client';
 
-	export let params: Record<string, string> = {}; // SvelteKit always passes this
-	$: void params;
+	let { children }: { children: Snippet } = $props();
 
 	const HUB_URL = import.meta.env.VITE_HUB_URL || 'http://localhost:5173';
 	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4004';
@@ -20,12 +20,12 @@
 		{ href: '/app/stats', label: 'Stats' }
 	];
 
-	let pendingCount = 0;
-	let overdueCount = 0;
+	let pendingCount = $state(0);
+	let overdueCount = $state(0);
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-	$: pathname = $page.url.pathname;
-	$: user = $adminAuth;
+	let pathname = $derived(page.url.pathname);
+	let user = $derived($adminAuth);
 
 	async function fetchChangeSummary() {
 		try {
@@ -133,7 +133,7 @@
 						<span class="text-xs text-gray-400" title="SertantAI Compliance version"
 							>v{appVersion}</span
 						>
-						<button on:click={signOut} class="text-sm text-gray-500 hover:text-gray-700">
+						<button onclick={signOut} class="text-sm text-gray-500 hover:text-gray-700">
 							Sign out
 						</button>
 					</div>
@@ -168,7 +168,7 @@
 
 		<!-- Main Content Area -->
 		<div class="flex-1 overflow-hidden">
-			<slot />
+			{@render children?.()}
 		</div>
 	</div>
 {/if}

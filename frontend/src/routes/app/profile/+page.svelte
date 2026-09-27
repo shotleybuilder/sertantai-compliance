@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SvelteSet } from 'svelte/reactivity';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -150,15 +151,15 @@
 
 	// ── State ───────────────────────────────────────────────────────
 
-	let currentStep = 0;
-	let loading = true;
-	let saving = false;
-	let saveError: string | null = null;
-	let lastSaved: Date | null = null;
+	let currentStep = $state(0);
+	let loading = $state(true);
+	let saving = $state(false);
+	let saveError = $state<string | null>(null);
+	let lastSaved = $state<Date | null>(null);
 
-	let definitionTerm: string | null = null;
-	let selectedOrgType: OrgType | null = null;
-	let openSubGroups = new Set<string>();
+	let definitionTerm = $state<string | null>(null);
+	let selectedOrgType = $state<OrgType | null>(null);
+	const openSubGroups = new SvelteSet<string>();
 
 	function toggleSubGroup(key: string) {
 		if (openSubGroups.has(key)) {
@@ -166,7 +167,6 @@
 		} else {
 			openSubGroups.add(key);
 		}
-		openSubGroups = openSubGroups;
 	}
 
 	function toggleCondition(code: string) {
@@ -185,7 +185,7 @@
 		}
 	}
 
-	let profile: ScreeningProfile = {
+	let profile: ScreeningProfile = $state({
 		regions: [],
 		governed_actors: [],
 		government_actors: [],
@@ -196,16 +196,16 @@
 		certifications: [],
 		contract_requirements: [],
 		conditions: []
-	};
+	});
 
-	let vocabulary: Vocabulary = {
+	let vocabulary: Vocabulary = $state({
 		governed_actors: [],
 		government_actors: [],
 		fitness_entities: [],
 		regions: []
-	};
+	});
 
-	let conditionalQuestions: ConditionalQuestion[] = [];
+	let conditionalQuestions = $state<ConditionalQuestion[]>([]);
 
 	// ── Vocabulary mapping ──────────────────────────────────────────
 	// Maps step profile keys to the available options from vocabulary
@@ -378,145 +378,6 @@
 		actors: string[];
 	}
 
-	$: identityActors = (() => {
-		const empty = {
-			public: null as null | { prefix: string; label: string; actors: string[] }[],
-			primary: [] as string[],
-			performs: [] as string[],
-			performsSubGroups: [] as ScSubGroup[],
-			has: [] as string[]
-		};
-		if (!selectedOrgType) return empty;
-
-		// Merge all actors from both vocab lists, deduplicate
-		const allActors = [
-			...new Set([...(vocabulary.governed_actors || []), ...(vocabulary.government_actors || [])])
-		].filter(isValidLabel);
-
-		if (selectedOrgType === 'public') {
-			// Government Body: Gvt:*, EU:*, Crown, HM — grouped by prefix
-			const pubPrefixes = ['Gvt:', 'EU:', 'Crown', 'HM '];
-			const pubActors = allActors.filter((a) => matchesAnyPrefix(a, pubPrefixes));
-			const groups = new Map<string, string[]>();
-			for (const actor of pubActors.sort()) {
-				const prefix = getActorPrefix(actor);
-				if (!groups.has(prefix)) groups.set(prefix, []);
-				groups.get(prefix)!.push(actor);
-			}
-			return {
-				...empty,
-				public: [...groups.entries()].map(([prefix, actors]) => ({
-					prefix,
-					label: PREFIX_LABELS[prefix] || prefix,
-					actors
-				}))
-			};
-		}
-
-		// Your Organisation — primary + performs + has
-		const govPrefixes = ['Gvt:', 'EU:', 'Crown', 'HM '];
-		const promoted = new Set(PROMOTED_TO_PERFORMS);
-
-		// Primary: Org:* + promoted actors (Self-employed Worker, Trade Union)
-		const primary: string[] = [];
-		// Performs: SC: (non-sub-grouped) + Svc: + Public: + Offshore: + unlabeled
-		const performs: string[] = [];
-		const scSubGrouped = new Map<string, string[]>();
-
-		for (const a of allActors) {
-			if (matchesAnyPrefix(a, govPrefixes)) continue;
-
-			if (a.startsWith('Org:') || promoted.has(a)) {
-				primary.push(a);
-			} else if (a.startsWith('SC:')) {
-				const sub = getScSubPrefix(a);
-				if (sub) {
-					if (!scSubGrouped.has(sub)) scSubGrouped.set(sub, []);
-					scSubGrouped.get(sub)!.push(a);
-				} else {
-					performs.push(a);
-				}
-			} else if (a.startsWith('Ind:') || a.startsWith('Spc:')) {
-				// handled below in "has" (unless promoted)
-			} else {
-				performs.push(a);
-			}
-		}
-
-		// Build sub-group concertinas
-		const performsSubGroups: ScSubGroup[] = [...scSubGrouped.entries()]
-			.map(([key, actors]) => ({
-				key,
-				label: SC_SUB_GROUPS[key] || key,
-				actors: actors.sort()
-			}))
-			.sort((a, b) => a.label.localeCompare(b.label));
-
-		// Has: Ind:* (minus promoted) + Spc:* (minus promoted)
-		const has = allActors
-			.filter(
-				(a) =>
-					(a.startsWith('Ind:') || a.startsWith('Spc:')) &&
-					!promoted.has(a) &&
-					!matchesAnyPrefix(a, govPrefixes)
-			)
-			.sort();
-
-		return { ...empty, primary: primary.sort(), performs: performs.sort(), performsSubGroups, has };
-	})();
-
-	$: identitySelectedCount = (() => {
-		if (!selectedOrgType) return 0;
-		if (selectedOrgType === 'public') return profile.government_actors.length;
-		return profile.governed_actors.length;
-	})();
-
-	// ── Completeness ────────────────────────────────────────────────
-
-	// 5 evaluator dimensions: personal, material, territorial, conditional, temporal
-	// We can cover personal (identity/people), material (activities/materials/locations/sector),
-	// territorial (geography). Conditional comes from conditional questions.
-	$: dimensionsCovered = (() => {
-		let count = 0;
-		const total = 5;
-		// personal = governed_actors + government_actors
-		if (profile.governed_actors.length > 0 || profile.government_actors.length > 0) count++;
-		// material = processes + materials + locations + sector
-		if (
-			profile.processes.length > 0 ||
-			profile.materials.length > 0 ||
-			profile.locations.length > 0 ||
-			profile.sector.length > 0
-		)
-			count++;
-		// territorial = regions
-		if (profile.regions.length > 0) count++;
-		// conditional — only if user answered conditional questions
-		// (tracked separately, not in main profile yet)
-		// temporal — not user-answerable
-		return { count, total, percentage: Math.round((count / total) * 100) };
-	})();
-
-	$: totalTags = [
-		...profile.governed_actors,
-		...profile.government_actors,
-		...profile.regions,
-		...profile.processes,
-		...profile.materials,
-		...profile.locations,
-		...profile.sector,
-		...(profile.certifications || [])
-	].length;
-
-	$: currentStepDef = currentStep < TOTAL_STEPS ? STEPS[currentStep] : null;
-
-	$: stepHasSelections = (step: StepDef) => {
-		if (step.key === 'identity') {
-			return profile.governed_actors.length > 0 || profile.government_actors.length > 0;
-		}
-		return step.profileKeys.some((k) => getProfileValues(k).length > 0);
-	};
-
 	// ── Data loading ────────────────────────────────────────────────
 
 	async function loadData() {
@@ -577,15 +438,14 @@
 	// ScreeningProfile has known string[] fields — we access them dynamically
 	// via step definitions, so we need a safe indexer.
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	type ProfileLists = Record<string, string[] | undefined>;
+
 	function getProfileValues(profileKey: string): string[] {
-		return ((profile as any)[profileKey] as string[] | undefined) || [];
+		return (profile as unknown as ProfileLists)[profileKey] || [];
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	function setProfileValues(profileKey: string, values: string[]) {
-		(profile as any)[profileKey] = values;
-		profile = profile; // trigger reactivity
+		(profile as unknown as ProfileLists)[profileKey] = values; // $state proxy: reactive
 	}
 
 	function toggleTag(profileKey: string, tag: string) {
@@ -686,6 +546,153 @@
 			return () => window.removeEventListener('popstate', handlePopState);
 		}
 	});
+	let identityActors = $derived(
+		(() => {
+			const empty = {
+				public: null as null | { prefix: string; label: string; actors: string[] }[],
+				primary: [] as string[],
+				performs: [] as string[],
+				performsSubGroups: [] as ScSubGroup[],
+				has: [] as string[]
+			};
+			if (!selectedOrgType) return empty;
+
+			// Merge all actors from both vocab lists, deduplicate
+			const allActors = [
+				...new Set([...(vocabulary.governed_actors || []), ...(vocabulary.government_actors || [])])
+			].filter(isValidLabel);
+
+			if (selectedOrgType === 'public') {
+				// Government Body: Gvt:*, EU:*, Crown, HM — grouped by prefix
+				const pubPrefixes = ['Gvt:', 'EU:', 'Crown', 'HM '];
+				const pubActors = allActors.filter((a) => matchesAnyPrefix(a, pubPrefixes));
+				const groups = new Map<string, string[]>();
+				for (const actor of pubActors.sort()) {
+					const prefix = getActorPrefix(actor);
+					if (!groups.has(prefix)) groups.set(prefix, []);
+					groups.get(prefix)!.push(actor);
+				}
+				return {
+					...empty,
+					public: [...groups.entries()].map(([prefix, actors]) => ({
+						prefix,
+						label: PREFIX_LABELS[prefix] || prefix,
+						actors
+					}))
+				};
+			}
+
+			// Your Organisation — primary + performs + has
+			const govPrefixes = ['Gvt:', 'EU:', 'Crown', 'HM '];
+			const promoted = new Set(PROMOTED_TO_PERFORMS);
+
+			// Primary: Org:* + promoted actors (Self-employed Worker, Trade Union)
+			const primary: string[] = [];
+			// Performs: SC: (non-sub-grouped) + Svc: + Public: + Offshore: + unlabeled
+			const performs: string[] = [];
+			const scSubGrouped = new Map<string, string[]>();
+
+			for (const a of allActors) {
+				if (matchesAnyPrefix(a, govPrefixes)) continue;
+
+				if (a.startsWith('Org:') || promoted.has(a)) {
+					primary.push(a);
+				} else if (a.startsWith('SC:')) {
+					const sub = getScSubPrefix(a);
+					if (sub) {
+						if (!scSubGrouped.has(sub)) scSubGrouped.set(sub, []);
+						scSubGrouped.get(sub)!.push(a);
+					} else {
+						performs.push(a);
+					}
+				} else if (a.startsWith('Ind:') || a.startsWith('Spc:')) {
+					// handled below in "has" (unless promoted)
+				} else {
+					performs.push(a);
+				}
+			}
+
+			// Build sub-group concertinas
+			const performsSubGroups: ScSubGroup[] = [...scSubGrouped.entries()]
+				.map(([key, actors]) => ({
+					key,
+					label: SC_SUB_GROUPS[key] || key,
+					actors: actors.sort()
+				}))
+				.sort((a, b) => a.label.localeCompare(b.label));
+
+			// Has: Ind:* (minus promoted) + Spc:* (minus promoted)
+			const has = allActors
+				.filter(
+					(a) =>
+						(a.startsWith('Ind:') || a.startsWith('Spc:')) &&
+						!promoted.has(a) &&
+						!matchesAnyPrefix(a, govPrefixes)
+				)
+				.sort();
+
+			return {
+				...empty,
+				primary: primary.sort(),
+				performs: performs.sort(),
+				performsSubGroups,
+				has
+			};
+		})()
+	);
+	let identitySelectedCount = $derived(
+		(() => {
+			if (!selectedOrgType) return 0;
+			if (selectedOrgType === 'public') return profile.government_actors.length;
+			return profile.governed_actors.length;
+		})()
+	);
+	// ── Completeness ────────────────────────────────────────────────
+
+	// 5 evaluator dimensions: personal, material, territorial, conditional, temporal
+	// We can cover personal (identity/people), material (activities/materials/locations/sector),
+	// territorial (geography). Conditional comes from conditional questions.
+	let dimensionsCovered = $derived(
+		(() => {
+			let count = 0;
+			const total = 5;
+			// personal = governed_actors + government_actors
+			if (profile.governed_actors.length > 0 || profile.government_actors.length > 0) count++;
+			// material = processes + materials + locations + sector
+			if (
+				profile.processes.length > 0 ||
+				profile.materials.length > 0 ||
+				profile.locations.length > 0 ||
+				profile.sector.length > 0
+			)
+				count++;
+			// territorial = regions
+			if (profile.regions.length > 0) count++;
+			// conditional — only if user answered conditional questions
+			// (tracked separately, not in main profile yet)
+			// temporal — not user-answerable
+			return { count, total, percentage: Math.round((count / total) * 100) };
+		})()
+	);
+	let totalTags = $derived(
+		[
+			...profile.governed_actors,
+			...profile.government_actors,
+			...profile.regions,
+			...profile.processes,
+			...profile.materials,
+			...profile.locations,
+			...profile.sector,
+			...(profile.certifications || [])
+		].length
+	);
+	let currentStepDef = $derived(currentStep < TOTAL_STEPS ? STEPS[currentStep] : null);
+	let stepHasSelections = $derived((step: StepDef) => {
+		if (step.key === 'identity') {
+			return profile.governed_actors.length > 0 || profile.government_actors.length > 0;
+		}
+		return step.profileKeys.some((k) => getProfileValues(k).length > 0);
+	});
 </script>
 
 <svelte:head>
@@ -722,7 +729,7 @@
 				<div class="flex items-center gap-1.5">
 					{#each STEPS as step, i}
 						<button
-							on:click={() => goToStep(i)}
+							onclick={() => goToStep(i)}
 							class="flex-1 py-2 group relative"
 							title="{step.label}{stepHasSelections(step) ? ' (selections made)' : ''}"
 						>
@@ -744,7 +751,7 @@
 						</button>
 					{/each}
 					<button
-						on:click={() => goToStep(REVIEW_STEP)}
+						onclick={() => goToStep(REVIEW_STEP)}
 						class="flex-1 py-2 group relative"
 						title="Review & Evaluate"
 					>
@@ -799,9 +806,9 @@
 						<div class="grid grid-cols-2 gap-3 mb-6">
 							{#each ORG_TYPES as orgType}
 								<button
-									on:click={() => {
+									onclick={() => {
 										selectedOrgType = orgType.key;
-										openSubGroups = new Set();
+										openSubGroups.clear();
 									}}
 									class="p-4 rounded-lg border-2 text-left transition-colors
 										{selectedOrgType === orgType.key
@@ -830,11 +837,14 @@
 												? TAG_ACTIVE
 												: TAG_INACTIVE}"
 										>
-											<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
+											<button onclick={() => toggleIdentityActor(tag)} class="pr-0.5">
 												{stripPrefix(tag)}
 											</button>
 											<button
-												on:click|stopPropagation={() => lookupDefinition('governed_actors', tag)}
+												onclick={(e) => {
+													e.stopPropagation();
+													lookupDefinition('governed_actors', tag);
+												}}
 												class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
 												title="Legal definition"
 											>
@@ -873,11 +883,14 @@
 												? TAG_ACTIVE
 												: TAG_INACTIVE}"
 										>
-											<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
+											<button onclick={() => toggleIdentityActor(tag)} class="pr-0.5">
 												{stripAllPrefixes(tag)}
 											</button>
 											<button
-												on:click|stopPropagation={() => lookupDefinition('governed_actors', tag)}
+												onclick={(e) => {
+													e.stopPropagation();
+													lookupDefinition('governed_actors', tag);
+												}}
 												class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
 												title="Legal definition"
 											>
@@ -912,11 +925,14 @@
 											? TAG_ACTIVE
 											: TAG_INACTIVE}"
 									>
-										<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
+										<button onclick={() => toggleIdentityActor(tag)} class="pr-0.5">
 											{stripAllPrefixes(tag)}
 										</button>
 										<button
-											on:click|stopPropagation={() => lookupDefinition('governed_actors', tag)}
+											onclick={(e) => {
+												e.stopPropagation();
+												lookupDefinition('governed_actors', tag);
+											}}
 											class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
 											title="Legal definition"
 										>
@@ -942,7 +958,7 @@
 							{#each identityActors.performsSubGroups as subGroup (subGroup.key)}
 								<div class="mt-3">
 									<button
-										on:click={() => toggleSubGroup(subGroup.key)}
+										onclick={() => toggleSubGroup(subGroup.key)}
 										class="text-xs font-medium text-gray-600 flex items-center gap-1 hover:text-gray-800"
 									>
 										<svg
@@ -967,12 +983,14 @@
 														? TAG_ACTIVE
 														: TAG_INACTIVE}"
 												>
-													<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
+													<button onclick={() => toggleIdentityActor(tag)} class="pr-0.5">
 														{stripAllPrefixes(tag)}
 													</button>
 													<button
-														on:click|stopPropagation={() =>
-															lookupDefinition('governed_actors', tag)}
+														onclick={(e) => {
+															e.stopPropagation();
+															lookupDefinition('governed_actors', tag);
+														}}
 														class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
 														title="Legal definition"
 													>
@@ -1010,11 +1028,14 @@
 												? TAG_ACTIVE
 												: TAG_INACTIVE}"
 										>
-											<button on:click={() => toggleIdentityActor(tag)} class="pr-0.5">
+											<button onclick={() => toggleIdentityActor(tag)} class="pr-0.5">
 												{stripAllPrefixes(tag)}
 											</button>
 											<button
-												on:click|stopPropagation={() => lookupDefinition('governed_actors', tag)}
+												onclick={(e) => {
+													e.stopPropagation();
+													lookupDefinition('governed_actors', tag);
+												}}
 												class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
 												title="Legal definition"
 											>
@@ -1070,11 +1091,14 @@
 												? TAG_ACTIVE
 												: TAG_INACTIVE}"
 										>
-											<button on:click={() => toggleTag(profileKey, tag)} class="pr-0.5">
+											<button onclick={() => toggleTag(profileKey, tag)} class="pr-0.5">
 												{formatTag(tag)}
 											</button>
 											<button
-												on:click|stopPropagation={() => lookupDefinition(profileKey, tag)}
+												onclick={(e) => {
+													e.stopPropagation();
+													lookupDefinition(profileKey, tag);
+												}}
 												class="ml-1 pl-1 border-l border-current/20 text-gray-400 hover:text-emerald-600"
 												title="Legal definition"
 											>
@@ -1118,7 +1142,7 @@
 											type="checkbox"
 											class="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
 											checked={(profile.conditions || []).includes(q.code)}
-											on:change={() => toggleCondition(q.code)}
+											onchange={() => toggleCondition(q.code)}
 										/>
 										<div>
 											<span class="text-sm text-gray-700">{q.text}</span>
@@ -1134,7 +1158,7 @@
 				<!-- Navigation buttons -->
 				<div class="flex items-center justify-between">
 					<button
-						on:click={prevStep}
+						onclick={prevStep}
 						disabled={currentStep === 0}
 						class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md
 							hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1145,14 +1169,14 @@
 					<div class="flex items-center gap-2">
 						{#if step.priority !== 'required'}
 							<button
-								on:click={skipStep}
+								onclick={skipStep}
 								class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700"
 							>
 								Skip
 							</button>
 						{/if}
 						<button
-							on:click={nextStep}
+							onclick={nextStep}
 							class="px-5 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md
 								hover:bg-emerald-700 disabled:opacity-50"
 							disabled={saving}
@@ -1264,7 +1288,7 @@
 									{/if}
 								</div>
 								<button
-									on:click={() => goToStep(i)}
+									onclick={() => goToStep(i)}
 									class="flex-shrink-0 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
 								>
 									Edit
@@ -1277,14 +1301,14 @@
 				<!-- Navigation buttons -->
 				<div class="flex items-center justify-between">
 					<button
-						on:click={prevStep}
+						onclick={prevStep}
 						class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
 					>
 						Back
 					</button>
 
 					<button
-						on:click={evaluateProfile}
+						onclick={evaluateProfile}
 						class="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-md hover:bg-emerald-700
 							disabled:opacity-50 flex items-center gap-2"
 						disabled={saving ||

@@ -17,17 +17,17 @@
 		type SyncJob
 	} from '$lib/api/sync';
 
-	let entitlement: OrgEntitlement | null = null;
-	let profiles: SyncProfile[] = [];
-	let configurations: SyncConfiguration[] = [];
-	let jobs: SyncJob[] = [];
-	let loading = true;
-	let error = '';
+	let entitlement = $state<OrgEntitlement | null>(null);
+	let profiles = $state<SyncProfile[]>([]);
+	let configurations = $state<SyncConfiguration[]>([]);
+	let jobs = $state<SyncJob[]>([]);
+	let loading = $state(true);
+	let error = $state('');
 
 	// Form state
-	let showProfileForm = false;
-	let showConfigForm = false;
-	let profileForm = {
+	let showProfileForm = $state(false);
+	let showConfigForm = $state(false);
+	let profileForm = $state({
 		name: '',
 		families: [] as string[],
 		geo_regions: null as string[] | null,
@@ -36,8 +36,8 @@
 		live_filter: null as string[] | null,
 		include_lat: false,
 		include_amendments: false
-	};
-	let configForm = {
+	});
+	let configForm = $state({
 		name: '',
 		sync_profile_id: '',
 		provider: 'baserow' as const,
@@ -48,11 +48,12 @@
 		sync_frequency: 'manual' as 'manual' | 'daily' | 'weekly',
 		on_filter_change: 'delete' as 'delete' | 'retain',
 		on_entitlement_change: 'delete' as 'delete' | 'retain'
-	};
+	});
 
-	let previewCount: { matched_law_count: number; matched_lat_count: number } | null = null;
-	let testResult: { ok: boolean; info?: Record<string, unknown>; error?: string } | null = null;
-	let actionMessage = '';
+	let previewCount = $state<{ matched_law_count: number; matched_lat_count: number } | null>(null);
+	let testResult: { ok: boolean; info?: Record<string, unknown>; error?: string } | null =
+		$state(null);
+	let actionMessage = $state('');
 
 	onMount(async () => {
 		await loadAll();
@@ -268,7 +269,7 @@
 			<div class="mb-3 flex items-center justify-between">
 				<h2 class="text-lg font-semibold text-gray-800">Sync Profiles</h2>
 				<button
-					on:click={() => {
+					onclick={() => {
 						showProfileForm = !showProfileForm;
 						if (!showProfileForm) resetProfileForm();
 					}}
@@ -301,7 +302,7 @@
 											<input
 												type="checkbox"
 												checked={profileForm.families.includes(family)}
-												on:change={() => toggleFamily(family)}
+												onchange={() => toggleFamily(family)}
 											/>
 											{family}
 										</label>
@@ -323,7 +324,7 @@
 
 						<div class="flex items-center gap-3">
 							<button
-								on:click={handlePreview}
+								onclick={handlePreview}
 								class="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
 								disabled={profileForm.families.length === 0}
 							>
@@ -337,7 +338,7 @@
 						</div>
 
 						<button
-							on:click={handleCreateProfile}
+							onclick={handleCreateProfile}
 							class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
 							disabled={!profileForm.name || profileForm.families.length === 0}
 						>
@@ -375,7 +376,7 @@
 								</div>
 							</div>
 							<button
-								on:click={() => handleDeleteProfile(profile.id)}
+								onclick={() => handleDeleteProfile(profile.id)}
 								class="text-sm text-red-500 hover:text-red-700">Delete</button
 							>
 						</div>
@@ -389,7 +390,7 @@
 			<div class="mb-3 flex items-center justify-between">
 				<h2 class="text-lg font-semibold text-gray-800">Sync Configurations</h2>
 				<button
-					on:click={() => {
+					onclick={() => {
 						showConfigForm = !showConfigForm;
 						if (!showConfigForm) resetConfigForm();
 					}}
@@ -526,7 +527,7 @@
 						</div>
 
 						<button
-							on:click={handleCreateConfig}
+							onclick={handleCreateConfig}
 							class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
 							disabled={!configForm.name ||
 								!configForm.sync_profile_id ||
@@ -569,13 +570,13 @@
 								</div>
 								<div class="flex items-center gap-2">
 									<button
-										on:click={() => handleTestConnection(config.id)}
+										onclick={() => handleTestConnection(config.id)}
 										class="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
 									>
 										Test
 									</button>
 									<button
-										on:click={() => handleTriggerSync(config.id)}
+										onclick={() => handleTriggerSync(config.id)}
 										class="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700"
 										disabled={config.sync_status === 'syncing' || config.sync_status === 'queued'}
 									>

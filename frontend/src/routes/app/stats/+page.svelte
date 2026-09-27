@@ -5,25 +5,25 @@
 
 	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4004';
 
-	let ready = false;
-	let error: string | null = null;
+	let ready = $state(false);
+	let error = $state<string | null>(null);
 
 	// Stats from GET /api/screening/stats
-	let totalMaking = 0;
-	let registerCount = 0;
-	let excludedCount = 0;
+	let totalMaking = $state(0);
+	let registerCount = $state(0);
+	let excludedCount = $state(0);
 
 	// Screener-aware counts from POST /api/screening/evaluate
-	let screenerMatches = 0;
-	let toReview = 0;
-	let evalSummary: EvaluationSummary | null = null;
+	let screenerMatches = $state(0);
+	let toReview = $state(0);
+	let evalSummary = $state<EvaluationSummary | null>(null);
 
 	interface FamilyStat {
 		family: string;
 		law_count: number;
 		duty_count: number;
 	}
-	let familyStats: FamilyStat[] = [];
+	let familyStats = $state<FamilyStat[]>([]);
 
 	// Server-side compliance metrics
 	interface ComplianceMetrics {
@@ -36,7 +36,7 @@
 		last_assessment_at: string | null;
 		last_synced_at: string | null;
 	}
-	let complianceMetrics: ComplianceMetrics | null = null;
+	let complianceMetrics = $state<ComplianceMetrics | null>(null);
 
 	// Change summary
 	interface ChangeSummary {
@@ -44,7 +44,7 @@
 		overdue: number;
 		by_materiality: { major: number; moderate: number; minor: number; informational: number };
 	}
-	let changeSummary: ChangeSummary | null = null;
+	let changeSummary = $state<ChangeSummary | null>(null);
 
 	function pct(n: number, total: number): string {
 		if (total === 0) return '0';
@@ -106,7 +106,7 @@
 		<div class="rounded-lg bg-red-50 border border-red-200 p-6 text-center">
 			<p class="text-sm text-red-600 mb-3">{error}</p>
 			<button
-				on:click={loadData}
+				onclick={loadData}
 				class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700"
 			>
 				Retry

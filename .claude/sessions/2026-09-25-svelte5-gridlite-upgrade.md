@@ -21,12 +21,13 @@ Decided 2026-09-25 (user): **after v0.1**. Prod serves a static build, so the re
 ## Todo
 
 - ✅ Released `gridlite-adapter-pglite` 0.8.0 with peer kit `^0.10.0` (2026-09-27, svelte-gridlite-kit#41)
-- ⬜ Step 2: Svelte 4 → 5 syntax (runes, `onclick`, snippets) in the remaining components, following legal's `479b367`; clear the 11 older lint warnings (`db as any`, misplaced disable comments)
+- ✅ Step 2: all 16 components on runes (`$props`, `$state`, `$derived`, `$effect`, `onclick`, `{@render}`), `$app/state`; no `svelte/legacy` imports; lint 0 warnings; unused svelte-query removed
 - ⬜ Step 3: browser check of GridLite 0.10 on browse and glossary (slots → snippets done in step 1: `toolbar-start`, `cell`, `row-detail`); PGLite adapter, live queries, views
 - ✅ Step 1, packages: Svelte 5.57, Vite 8.3, vite-plugin-svelte 7.3, vitest 5, svelte-check 4.7, kit 2.70.3, GridLite kit 0.10 + adapter 0.8.0; Tailwind moved from PostCSS to `@tailwindcss/vite`; lockfile regenerated; Docker build OK
 - ✅ svelte-query 5 → 6, prettier-plugin-svelte 3 → 4 (Sentry 11 unchanged)
 - ✅ `frontend/.npmrc` (`legacy-peer-deps`) removed, also from the Dockerfile
-- ⬜ `npm audit` is clean; frontend check, lint, tests and build pass; browser check of browse, glossary, screening, profile and changes
+- ⬜ Follow-up (GridLite repo): `svelte-gridlite-views` 0.2.1 still dispatches Svelte 4 events, so `on:viewSelected`, `on:save` and `on:close` stay until it moves to callback props
+- ⬜ `npm audit` is clean (3 low accepted, see step 1); frontend check, lint, tests and build pass; browser check of browse, glossary, screening, profile and changes
 
 ## Step 1 notes (2026-09-27)
 
@@ -39,7 +40,19 @@ Decided 2026-09-25 (user): **after v0.1**. Prod serves a static build, so the re
 - **Results:** svelte-check 0/0, lint 0 errors (11 older warnings), 142 tests, build OK, Docker image builds, Prettier clean.
 - **npm audit:** 3 low, all `cookie@0.6.0` pinned by the latest SvelteKit (2.70.3). No fix upstream (`--force` downgrades kit). Accepted: the app is an adapter-static build, so kit's server-side cookie code doesn't run in prod.
 - `vitest.config.ts`: dropped `svelte({ hot })` (the option was removed in vite-plugin-svelte 4+).
-- Possibly unused: `@tanstack/svelte-query` is only used for the provider; nothing calls `createQuery`. Check in step 2 and remove it if so.
+
+## Step 2 notes (2026-09-27)
+
+- **Tool first, then by hand.** Ran `migrate()` from `svelte/compiler` (what `sv migrate svelte-5` uses) over every component, then replaced what it left:
+  - `run()` shims → `$effect`. The view-store subscription now returns its unsubscriber as the effect's cleanup, so the `activeViewUnsub` bookkeeping went.
+  - `params` props and their `void params` shims were deleted. Svelte 4 needed them to silence unknown-prop warnings; runes mode doesn't.
+  - `stopPropagation()` and `createBubbler()` → inline `(e) => { e.stopPropagation(); … }`.
+  - `let x: T = $state(v)` → `$state<T>(v)`. The annotated form narrowed `result` to `null`, giving `never` errors.
+- **A bug the tools didn't catch:** `openSubGroups` in the profile wizard was `$state(new Set())`, mutated and then self-assigned. `$state` doesn't make a `Set` reactive, and assigning the same reference does nothing in Svelte 5, so the sub-group toggles would have silently stopped working. It's now a `SvelteSet` (`.clear()` on org-type change). Other `x = x` self-assignments on proxied records were removed.
+- **`$app/stores` → `$app/state`** (4 files; the stores API is deprecated since SvelteKit 2.12).
+- **`@tanstack/svelte-query` removed.** Only the root `QueryClientProvider` used it, and nothing ran a query: a starter-template leftover whose comment still mentioned TanStack DB persistence.
+- **Lint warnings 11 → 0:** the `db as any` casts weren't needed, the profile indexers are typed (`ProfileLists`) instead of `any`, and stale disable comments are gone.
+- **Results:** svelte-check 0/0, lint 0/0, Prettier clean, 142 tests, build OK. Runtime behaviour (effects, ownership warnings, GridLite) is checked in the browser in step 3.
 
 ## Target versions (npm, 2026-09-27)
 

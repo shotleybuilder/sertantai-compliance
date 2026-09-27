@@ -3,9 +3,6 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { GridLite } from '@shotleybuilder/svelte-gridlite-kit';
 
-	export let params: Record<string, string> = {}; // SvelteKit always passes this
-	$: void params;
-
 	import '@shotleybuilder/svelte-gridlite-kit/styles';
 	import type {
 		ColumnConfig,
@@ -38,17 +35,16 @@
 	import { defaultViews, defaultGroupDefs, getViewGroupName } from '$lib/views/glossary-views';
 	import { getPglite, type PGLiteWithExtensions } from '$lib/pglite/client';
 	import { startSync, syncStatus } from '$lib/pglite/sync';
-
 	// ── State ──────────────────────────────────────────────────────
 
 	let db: PGLiteWithExtensions | null = null;
-	let ready = false;
-	let gridRef: GridLite;
-	let adapter: ReturnType<typeof createPGLiteAdapter> | null = null;
-	let error: string | null = null;
-	let viewStore: ViewStoreBundle | null = null;
-	let showSaveModal = false;
-	let capturedConfig: ViewConfig | null = null;
+	let ready = $state(false);
+	let gridRef = $state<GridLite | undefined>();
+	let adapter = $state<ReturnType<typeof createPGLiteAdapter> | null>(null);
+	let error = $state<string | null>(null);
+	let viewStore = $state<ViewStoreBundle | null>(null);
+	let showSaveModal = $state(false);
+	let capturedConfig = $state<ViewConfig | null>(null);
 
 	// Column config for GridLite — user-friendly headers
 	const COLUMN_HEADERS: Record<string, string> = {
@@ -102,8 +98,8 @@
 
 	// ── View management ────────────────────────────────────────────
 
-	let activeVisibleColumns: string[] = DEFINITIONS_DEFAULT_VISIBLE;
-	let sidebarVisible = false;
+	let activeVisibleColumns = $state<string[]>(DEFINITIONS_DEFAULT_VISIBLE);
+	let sidebarVisible = $state(false);
 
 	function switchToView(viewName: string, savedConfig?: ViewConfig) {
 		if (savedConfig?.columnVisibility) {
@@ -212,21 +208,13 @@
 		}
 	}
 
-	// ── Sync status ────────────────────────────────────────────────
-
-	$: if ($syncStatus.error) {
-		error = $syncStatus.error;
-	}
-	$: isLoading = !ready;
-
-	let hasActiveView = false;
-	let activeViewUnsub: (() => void) | null = null;
-	$: if (viewStore) {
-		activeViewUnsub?.();
-		activeViewUnsub = viewStore.activeViewId.subscribe((v: string | null) => {
+	let hasActiveView = $state(false);
+	$effect(() => {
+		if (!viewStore) return;
+		return viewStore.activeViewId.subscribe((v: string | null) => {
 			hasActiveView = !!v;
 		});
-	}
+	});
 
 	// ── Lifecycle ──────────────────────────────────────────────────
 
@@ -234,9 +222,9 @@
 		if (browser) {
 			await startSync();
 			db = await getPglite();
-			await runViewMigrations(db as any);
-			viewStore = initViewStore(db as any, 'glossary');
-			adapter = createPGLiteAdapter({ db: db as any, query: DEFINITIONS_SQL });
+			await runViewMigrations(db);
+			viewStore = initViewStore(db, 'glossary');
+			adapter = createPGLiteAdapter({ db, query: DEFINITIONS_SQL });
 			await adapter.init();
 			ready = true;
 			setTimeout(() => seedGlossaryViews(), 100);
@@ -244,9 +232,17 @@
 	});
 
 	onDestroy(() => {
-		activeViewUnsub?.();
 		viewStore?.destroy();
 	});
+
+	// ── Sync status ────────────────────────────────────────────────
+
+	$effect(() => {
+		if ($syncStatus.error) {
+			error = $syncStatus.error;
+		}
+	});
+	let isLoading = $derived(!ready);
 </script>
 
 <svelte:head>
@@ -260,7 +256,7 @@
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="fixed inset-0 bg-black/30 z-30 lg:hidden"
-			on:click={() => (sidebarVisible = false)}
+			onclick={() => (sidebarVisible = false)}
 		></div>
 	{/if}
 
@@ -285,7 +281,7 @@
 		<div class="mb-4 flex items-center gap-3">
 			<button
 				class="lg:hidden p-1.5 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
-				on:click={() => (sidebarVisible = !sidebarVisible)}
+				onclick={() => (sidebarVisible = !sidebarVisible)}
 				title="Toggle views sidebar"
 			>
 				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -321,7 +317,7 @@
 				<p class="text-red-600">{error}</p>
 				<button
 					class="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-					on:click={() => window.location.reload()}>Retry</button
+					onclick={() => window.location.reload()}>Retry</button
 				>
 			</div>
 		{:else if ready && adapter}
@@ -332,14 +328,14 @@
 					<div class="inline-flex rounded-md shadow-sm">
 						<button
 							type="button"
-							on:click={handleUpdateView}
+							onclick={handleUpdateView}
 							class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-l-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
 						>
 							Save View
 						</button>
 						<button
 							type="button"
-							on:click={handleSaveView}
+							onclick={handleSaveView}
 							aria-label="Save as a new view"
 							class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-emerald-600 border-l border-emerald-500 rounded-r-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
 						>
@@ -356,7 +352,7 @@
 				{:else}
 					<button
 						type="button"
-						on:click={handleSaveView}
+						onclick={handleSaveView}
 						class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
 					>
 						Save as View

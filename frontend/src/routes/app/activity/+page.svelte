@@ -17,10 +17,10 @@
 		inserted_at: string;
 	}
 
-	let events: ActivityEvent[] = [];
-	let total = 0;
-	let loading = true;
-	let offset = 0;
+	let events = $state<ActivityEvent[]>([]);
+	let total = $state(0);
+	let loading = $state(true);
+	let offset = $state(0);
 	const limit = 50;
 
 	async function loadEvents() {
@@ -233,7 +233,7 @@
 		{#if total > limit}
 			<div class="flex items-center justify-between pt-2">
 				<button
-					on:click={prevPage}
+					onclick={prevPage}
 					disabled={offset === 0}
 					class="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
 				>
@@ -243,7 +243,7 @@
 					{offset + 1}–{Math.min(offset + limit, total)} of {total}
 				</span>
 				<button
-					on:click={nextPage}
+					onclick={nextPage}
 					disabled={offset + limit >= total}
 					class="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
 				>

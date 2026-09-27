@@ -37,29 +37,29 @@
 
 	// ── State ───────────────────────────────────────────────────────
 
-	let result: EvaluationResult | null = null;
-	let profile: ScreeningProfile | null = null;
-	let loading = true;
-	let error: string | null = null;
+	let result = $state<EvaluationResult | null>(null);
+	let profile = $state<ScreeningProfile | null>(null);
+	let loading = $state(true);
+	let error = $state<string | null>(null);
 
-	let activeTab: Tab = 'all';
-	let searchQuery = '';
-	let familyFilter: string | null = null;
-	let sortBy: SortKey = 'confidence';
-	let statusFilter: StatusFilter = 'all';
+	let activeTab = $state<Tab>('all');
+	let searchQuery = $state('');
+	let familyFilter = $state<string | null>(null);
+	let sortBy = $state<SortKey>('confidence');
+	let statusFilter = $state<StatusFilter>('all');
 
-	let actionInProgress: string | null = null;
-	let showBulkConfirm = false;
-	let expandedCard: string | null = null;
+	let actionInProgress = $state<string | null>(null);
+	let showBulkConfirm = $state(false);
+	let expandedCard = $state<string | null>(null);
 
-	let undoToast: { lawName: string; action: string; previousStatus: string } | null = null;
+	let undoToast = $state<{ lawName: string; action: string; previousStatus: string } | null>(null);
 	let undoTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Drill-down state
-	let provisionCache: Record<string, ProvisionsResult> = {};
-	let provisionLoading: string | null = null;
-	let drilldownTab: Record<string, 'provisions' | 'tree' | 'actors'> = {};
-	let actorFilter: string | null = null;
+	let provisionCache = $state<Record<string, ProvisionsResult>>({});
+	let provisionLoading = $state<string | null>(null);
+	let drilldownTab = $state<Record<string, 'provisions' | 'tree' | 'actors'>>({});
+	let actorFilter = $state<string | null>(null);
 
 	const drilldownTabs: { key: 'provisions' | 'tree' | 'actors'; label: string }[] = [
 		{ key: 'provisions', label: 'Provisions' },
@@ -69,23 +69,20 @@
 
 	// ── Derived ─────────────────────────────────────────────────────
 
-	$: allMatches = result?.matches ?? [];
-	$: applying = allMatches.filter((m) => m.applies);
-	$: families = [...new Set(applying.map((m) => m.family).filter(Boolean))].sort() as string[];
+	let allMatches = $derived(result?.matches ?? []);
+	let applying = $derived(allMatches.filter((m) => m.applies));
+	let families = $derived(
+		[...new Set(applying.map((m) => m.family).filter(Boolean))].sort() as string[]
+	);
 
-	$: strongUnaccepted = applying.filter(
-		(m) => m.confidence >= 0.8 && m.current_status !== 'yes'
-	).length;
+	let strongUnaccepted = $derived(
+		applying.filter((m) => m.confidence >= 0.8 && m.current_status !== 'yes').length
+	);
 
-	$: tabCounts = _computeTabCounts(allMatches, result?.summary.not_evaluable ?? 0);
+	let tabCounts = $derived(_computeTabCounts(allMatches, result?.summary.not_evaluable ?? 0));
 
-	$: filteredMatches = _filterAndSort(
-		allMatches,
-		activeTab,
-		searchQuery,
-		familyFilter,
-		sortBy,
-		statusFilter
+	let filteredMatches = $derived(
+		_filterAndSort(allMatches, activeTab, searchQuery, familyFilter, sortBy, statusFilter)
 	);
 
 	// ── Tabs ────────────────────────────────────────────────────────
@@ -193,10 +190,8 @@
 		provisionLoading = lawName;
 		try {
 			provisionCache[lawName] = await getProvisions(lawName);
-			provisionCache = provisionCache; // trigger reactivity
 			if (!drilldownTab[lawName]) {
 				drilldownTab[lawName] = 'provisions';
-				drilldownTab = drilldownTab;
 			}
 		} catch (e) {
 			console.error('Failed to load provisions:', e);
@@ -207,7 +202,6 @@
 
 	function setDrilldownTab(lawName: string, tab: 'provisions' | 'tree' | 'actors') {
 		drilldownTab[lawName] = tab;
-		drilldownTab = drilldownTab;
 		actorFilter = null;
 	}
 
@@ -278,7 +272,7 @@
 				<h2 class="text-lg font-semibold text-red-800 mb-2">Evaluation Failed</h2>
 				<p class="text-sm text-red-600 mb-4">{error}</p>
 				<button
-					on:click={loadData}
+					onclick={loadData}
 					class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700"
 				>
 					Retry
@@ -355,7 +349,7 @@
 			{@const venn = result.summary.venn}
 			<div class="grid grid-cols-3 gap-3 mb-6">
 				<button
-					on:click={() => {
+					onclick={() => {
 						activeTab = 'strong';
 						statusFilter = 'unreviewed';
 					}}
@@ -389,7 +383,7 @@
 					class="mb-4 flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3"
 				>
 					<button
-						on:click={() => {
+						onclick={() => {
 							activeTab = 'strong';
 							statusFilter = 'unreviewed';
 						}}
@@ -400,7 +394,7 @@
 							: 'es'} not yet in your register
 					</button>
 					<button
-						on:click={() => (showBulkConfirm = true)}
+						onclick={() => (showBulkConfirm = true)}
 						class="px-3 py-1.5 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50"
 						disabled={actionInProgress === 'bulk'}
 					>
@@ -415,7 +409,7 @@
 					{#each tabs as tab}
 						{@const count = tabCounts[tab.key]}
 						<button
-							on:click={() => (activeTab = tab.key)}
+							onclick={() => (activeTab = tab.key)}
 							class="whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 transition-colors
 							{activeTab === tab.key
 								? 'border-emerald-500 text-emerald-600'
@@ -528,7 +522,7 @@
 						{#if searchQuery || familyFilter || statusFilter !== 'all'}
 							No laws match your filters.
 							<button
-								on:click={() => {
+								onclick={() => {
 									searchQuery = '';
 									familyFilter = null;
 									statusFilter = 'all';
@@ -558,7 +552,7 @@
 							>
 								<!-- Card Header -->
 								<button
-									on:click={() => toggleCard(match.law_name)}
+									onclick={() => toggleCard(match.law_name)}
 									class="w-full text-left px-4 py-3 flex items-start gap-3"
 								>
 									<!-- Confidence indicator -->
@@ -821,7 +815,10 @@
 										<div class="mt-4 pt-3 border-t border-gray-100">
 											{#if !provisionCache[match.law_name] && provisionLoading !== match.law_name}
 												<button
-													on:click|stopPropagation={() => loadProvisions(match.law_name)}
+													onclick={(e) => {
+														e.stopPropagation();
+														loadProvisions(match.law_name);
+													}}
 													class="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
 												>
 													View provisions & obligations
@@ -841,8 +838,10 @@
 												<div class="flex items-center gap-1 mb-3 flex-wrap">
 													{#each drilldownTabs as tab}
 														<button
-															on:click|stopPropagation={() =>
-																setDrilldownTab(match.law_name, tab.key)}
+															onclick={(e) => {
+																e.stopPropagation();
+																setDrilldownTab(match.law_name, tab.key);
+															}}
 															class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors
 															{currentTab === tab.key
 																? 'bg-emerald-100 text-emerald-700'
@@ -874,7 +873,10 @@
 																></span
 															>
 															<button
-																on:click|stopPropagation={() => (actorFilter = null)}
+																onclick={(e) => {
+																	e.stopPropagation();
+																	actorFilter = null;
+																}}
 																class="text-emerald-600 hover:underline">Clear</button
 															>
 														</div>
@@ -885,7 +887,7 @@
 														<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 														<div
 															class="space-y-3 max-h-96 overflow-y-auto"
-															on:click|stopPropagation
+															onclick={(e) => e.stopPropagation()}
 														>
 															{#each groups as group}
 																{@const meta = DRRP_META[group.type]}
@@ -926,8 +928,10 @@
 																								{@const ap = actorPillStyle(actor)}
 																								<button
 																									class="px-1 py-0.5 rounded {ap.bg} {ap.text} hover:opacity-80"
-																									on:click|stopPropagation={() =>
-																										(actorFilter = actor.label)}
+																									onclick={(e) => {
+																										e.stopPropagation();
+																										actorFilter = actor.label;
+																									}}
 																								>
 																									{actor.label}
 																								</button>
@@ -954,7 +958,7 @@
 												{:else if currentTab === 'tree'}
 													{#if prov.applicability_tree}
 														<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-														<div on:click|stopPropagation>
+														<div onclick={(e) => e.stopPropagation()}>
 															<TreeSummary
 																tree={prov.applicability_tree}
 																matchReasons={match.match_reasons}
@@ -982,7 +986,7 @@
 														<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 														<div
 															class="space-y-1 max-h-96 overflow-y-auto"
-															on:click|stopPropagation
+															onclick={(e) => e.stopPropagation()}
 														>
 															{#each actors as entry}
 																{@const ep = actorPillStyle({
@@ -991,7 +995,8 @@
 																	position: entry.position
 																})}
 																<button
-																	on:click|stopPropagation={() => {
+																	onclick={(e) => {
+																		e.stopPropagation();
 																		setDrilldownTab(match.law_name, 'provisions');
 																		actorFilter = entry.actor;
 																	}}
@@ -1025,7 +1030,10 @@
 										<div class="mt-4 flex items-center gap-2 pt-3 border-t border-gray-100">
 											{#if match.current_status !== 'yes'}
 												<button
-													on:click|stopPropagation={() => setStatus(match.law_name, 'yes')}
+													onclick={(e) => {
+														e.stopPropagation();
+														setStatus(match.law_name, 'yes');
+													}}
 													disabled={isActioning}
 													class="px-3 py-1.5 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50"
 												>
@@ -1034,7 +1042,10 @@
 											{/if}
 											{#if match.current_status !== 'excluded'}
 												<button
-													on:click|stopPropagation={() => setStatus(match.law_name, 'excluded')}
+													onclick={(e) => {
+														e.stopPropagation();
+														setStatus(match.law_name, 'excluded');
+													}}
 													disabled={isActioning}
 													class="px-3 py-1.5 bg-white text-gray-700 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
 												>
@@ -1043,7 +1054,10 @@
 											{/if}
 											{#if match.current_status === 'yes' || match.current_status === 'excluded'}
 												<button
-													on:click|stopPropagation={() => setStatus(match.law_name, 'unreviewed')}
+													onclick={(e) => {
+														e.stopPropagation();
+														setStatus(match.law_name, 'unreviewed');
+													}}
 													disabled={isActioning}
 													class="px-3 py-1.5 text-gray-500 text-sm font-medium hover:text-gray-700 disabled:opacity-50"
 												>
@@ -1067,7 +1081,7 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center">
 		<button
 			class="absolute inset-0 bg-black/50"
-			on:click={() => (showBulkConfirm = false)}
+			onclick={() => (showBulkConfirm = false)}
 			tabindex="-1"
 			aria-label="Cancel"
 		></button>
@@ -1080,13 +1094,13 @@
 			</p>
 			<div class="flex justify-end gap-3">
 				<button
-					on:click={() => (showBulkConfirm = false)}
+					onclick={() => (showBulkConfirm = false)}
 					class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
 				>
 					Cancel
 				</button>
 				<button
-					on:click={bulkAcceptStrong}
+					onclick={bulkAcceptStrong}
 					disabled={actionInProgress === 'bulk'}
 					class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50"
 				>
@@ -1106,7 +1120,7 @@
 			<span class="font-medium">{undoToast.lawName}</span>
 			{undoToast.action.toLowerCase()}
 		</span>
-		<button on:click={undo} class="font-medium text-emerald-400 hover:text-emerald-300">
+		<button onclick={undo} class="font-medium text-emerald-400 hover:text-emerald-300">
 			Undo
 		</button>
 	</div>

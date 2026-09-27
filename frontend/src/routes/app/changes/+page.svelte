@@ -31,12 +31,12 @@
 		overdue: boolean;
 	}
 
-	let summary: ChangeSummary | null = null;
-	let changes: ChangeEvent[] = [];
-	let loading = true;
-	let filter: string | null = null;
-	let decidingId: string | null = null;
-	let decisionReason = '';
+	let summary = $state<ChangeSummary | null>(null);
+	let changes = $state<ChangeEvent[]>([]);
+	let loading = $state(true);
+	let filter = $state<string | null>(null);
+	let decidingId = $state<string | null>(null);
+	let decisionReason = $state('');
 
 	const materialityColors: Record<string, { bg: string; text: string; label: string }> = {
 		major: { bg: 'bg-red-100', text: 'text-red-800', label: 'Major' },
@@ -58,7 +58,7 @@
 		law_status_changed: 'Status changes (earlier detection)'
 	};
 
-	let exporting = false;
+	let exporting = $state(false);
 
 	/** Download pending changes as CSV (for hand-off to an assessment tool). */
 	async function exportCsv() {
@@ -79,7 +79,7 @@
 		}
 	}
 
-	let groupByEvent = true;
+	let groupByEvent = $state(true);
 
 	function groupChanges(
 		items: ChangeEvent[]
@@ -141,7 +141,7 @@
 		<div class="flex items-center justify-between mb-6">
 			<h1 class="text-2xl font-bold text-gray-900">Change Review</h1>
 			<button
-				on:click={exportCsv}
+				onclick={exportCsv}
 				disabled={exporting}
 				class="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
 			>
@@ -163,7 +163,7 @@
 				{#each matCards as card}
 					{@const mc = materialityColors[card.key]}
 					<button
-						on:click={() => setFilter(card.key)}
+						onclick={() => setFilter(card.key)}
 						class="rounded-lg p-4 text-left transition-all
 							{filter === card.key ? 'ring-2 ring-emerald-500' : ''}
 							{mc.bg}"
@@ -184,7 +184,7 @@
 			{#if changes.length > 0}
 				<div class="flex items-center gap-2 mb-4">
 					<button
-						on:click={() => (groupByEvent = !groupByEvent)}
+						onclick={() => (groupByEvent = !groupByEvent)}
 						class="text-sm text-gray-500 hover:text-gray-700"
 					>
 						{groupByEvent ? 'Flat view' : 'Group by type'}
@@ -197,7 +197,7 @@
 				<div class="text-center py-12 text-gray-500">
 					{#if filter}
 						No {filter} changes pending.
-						<button on:click={() => setFilter(null)} class="text-emerald-600 underline ml-1"
+						<button onclick={() => setFilter(null)} class="text-emerald-600 underline ml-1"
 							>Clear filter</button
 						>
 					{:else}
@@ -256,35 +256,35 @@
 													{/if}
 													{#if isRemovalChange(change)}
 														<button
-															on:click={() => decide(change.id, 'archive')}
+															onclick={() => decide(change.id, 'archive')}
 															class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
 															>Archive</button
 														>
 														<button
-															on:click={() => decide(change.id, 'keep')}
+															onclick={() => decide(change.id, 'keep')}
 															class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
 															>Keep</button
 														>
 													{:else if change.event === 'new_law_available'}
 														<button
-															on:click={() => decide(change.id, 'add')}
+															onclick={() => decide(change.id, 'add')}
 															class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
 															>Add</button
 														>
 														<button
-															on:click={() => decide(change.id, 'dismiss')}
+															onclick={() => decide(change.id, 'dismiss')}
 															class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
 															>Dismiss</button
 														>
 													{:else}
 														<button
-															on:click={() => decide(change.id, 'keep')}
+															onclick={() => decide(change.id, 'keep')}
 															class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
 															>Acknowledge</button
 														>
 													{/if}
 													<button
-														on:click={() => {
+														onclick={() => {
 															decidingId = null;
 															decisionReason = '';
 														}}
@@ -294,7 +294,7 @@
 												</div>
 											{:else}
 												<button
-													on:click={() => (decidingId = change.id)}
+													onclick={() => (decidingId = change.id)}
 													class="px-3 py-1.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200"
 												>
 													Review
@@ -355,35 +355,35 @@
 											{/if}
 											{#if isRemovalChange(change)}
 												<button
-													on:click={() => decide(change.id, 'archive')}
+													onclick={() => decide(change.id, 'archive')}
 													class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
 													>Archive</button
 												>
 												<button
-													on:click={() => decide(change.id, 'keep')}
+													onclick={() => decide(change.id, 'keep')}
 													class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
 													>Keep</button
 												>
 											{:else if change.event === 'new_law_available'}
 												<button
-													on:click={() => decide(change.id, 'add')}
+													onclick={() => decide(change.id, 'add')}
 													class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
 													>Add</button
 												>
 												<button
-													on:click={() => decide(change.id, 'dismiss')}
+													onclick={() => decide(change.id, 'dismiss')}
 													class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
 													>Dismiss</button
 												>
 											{:else}
 												<button
-													on:click={() => decide(change.id, 'keep')}
+													onclick={() => decide(change.id, 'keep')}
 													class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
 													>Acknowledge</button
 												>
 											{/if}
 											<button
-												on:click={() => {
+												onclick={() => {
 													decidingId = null;
 													decisionReason = '';
 												}}
@@ -392,7 +392,7 @@
 										</div>
 									{:else}
 										<button
-											on:click={() => (decidingId = change.id)}
+											onclick={() => (decidingId = change.id)}
 											class="px-3 py-1.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200"
 										>
 											Review

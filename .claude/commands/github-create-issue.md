@@ -1,8 +1,8 @@
 Create a GitHub Issue using `gh` CLI.
 
 ---
-**LABEL LIST LAST UPDATED**: 2025-11-15
-**Repository**: shotleybuilder/sertantai-ash-electricsql-svelte-tanstack-starter
+**LABEL LIST LAST UPDATED**: 2026-09-27
+**Repository**: shotleybuilder/sertantai-compliance
 
 **CURRENT LABELS**:
 - `bug` - Something isn't working
@@ -14,6 +14,12 @@ Create a GitHub Issue using `gh` CLI.
 - `invalid` - This doesn't seem right
 - `question` - Further information is requested
 - `wontfix` - This will not be worked on
+- `security` - Security issue: fix before exposing to users
+- `pilot` - QQ pilot feedback: triage as v0.1 rc fix (release/0.1) or v0.2 work
+
+**Issues in other SertantAI repos** (legal, auth, hub, stack): this list
+doesn't apply. Pass `--repo shotleybuilder/<repo>` to `gh issue create`, and
+pick labels from `gh label list --repo shotleybuilder/<repo>`.
 
 ---
 
@@ -24,7 +30,7 @@ Create a GitHub Issue using `gh` CLI.
 **IMPORTANT**: Before creating the issue, check if the label list above is stale:
 
 ```bash
-# Calculate days since last update (2025-11-15)
+# Calculate days since last update (2026-09-27)
 # If >30 days old, REFRESH LABELS FIRST
 ```
 

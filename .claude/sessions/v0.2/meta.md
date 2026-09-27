@@ -41,7 +41,7 @@ to clash with v0.1 fixes merged forward.
 | 1 | [Wizard on the corpus vocabulary](./01-wizard-corpus-vocabulary.md) | pending | — | Wizard options come from `GET /vocabulary`, not hard-coded lists (only 20 of 54 exist in any tree); #22 definitions only from in-force laws |
 | 2 | [API surface](./02-api-surface.md) | pending | — | OpenAPI spec for profile and evaluate; rate limiting (08 #11); MCP auth design against auth#23 |
 | 3 | [Engineering hygiene](./03-engineering-hygiene.md) | pending | — | CI builds and pushes images on `v*` tags (02 deferred); decide on `ChangeDetector.trigger_async/1`; dev-only CORS origins (08 #8) |
-| 4 | [Svelte 5 + GridLite 0.10 + Vite 8](../2026-09-25-svelte5-gridlite-upgrade.md) | pending (unblocked: adapter 0.8.0, 2026-09-27) | — (was "after v0.1"; `release/0.1` now keeps it out of v0.1) | npm audit clean; drop `legacy-peer-deps`. Best done before the pilot. It is a big frontend change, and v0.1 fixes merged forward will conflict with it more the later it lands |
+| 4 | [Svelte 5 + GridLite 0.10 + Vite 8](../2026-09-25-svelte5-gridlite-upgrade.md) | **active** (2026-09-27) | — (was "after v0.1"; `release/0.1` now keeps it out of v0.1) | npm audit clean; drop `legacy-peer-deps`. Best done before the pilot. It is a big frontend change, and v0.1 fixes merged forward will conflict with it more the later it lands |
 
 ## Phase B: product work, ordered by pilot feedback (November)
 

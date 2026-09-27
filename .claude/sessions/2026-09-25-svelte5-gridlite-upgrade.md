@@ -20,7 +20,7 @@ Decided 2026-09-25 (user): **after v0.1**. Prod serves a static build, so the re
 
 ## Todo
 
-- ⬜ Release `gridlite-adapter-pglite` for GridLite kit 0.10 (in the GridLite repo; required first)
+- ✅ Released `gridlite-adapter-pglite` 0.8.0 with peer kit `^0.10.0` (2026-09-27, svelte-gridlite-kit#41)
 - ⬜ Svelte 4 → 5 (runes, snippets, events); follow legal's migration (`479b367`, "Svelte 5 migration — runes, snippets, TanStack Query v6")
 - ⬜ GridLite kit 0.7.1 → 0.10.x and GridLite views; recheck the browse and glossary pages (PGLite adapter, live queries, views)
 - ⬜ Vite 5 → 8, vite-plugin-svelte 3 → 7, svelte-check 3 → 4, vitest 4 → 5; check `vite.config.ts` (`define`, `VITE_DEV_HOST`) and the Docker build
@@ -30,7 +30,7 @@ Decided 2026-09-25 (user): **after v0.1**. Prod serves a static build, so the re
 ## Dependencies
 
 - ⬜ v0.1.0 released to QQ
-- ⬜ `gridlite-adapter-pglite` supporting GridLite kit ^0.10
+- ✅ `gridlite-adapter-pglite` 0.8.0 supports GridLite kit ^0.10
 
 ## Pull it forward if
 

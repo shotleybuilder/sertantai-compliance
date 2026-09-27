@@ -19,8 +19,8 @@ The profile and screening REST API exists (v0.1-04a), and its Ash actions have d
 
 - ⬜ OpenAPI spec for `/profile` (GET, PUT, PATCH, `check`), `/vocabulary` and `POST /api/screening/evaluate`, generated from the Ash actions where possible (`ash_json_api` / `open_api_spex`), served, and checked in CI
 - ⬜ Rate limiting per user or org on the API and the Electric proxy (e.g. Hammer), with limits that live polling can't trip
-- ⬜ Raise the sertantai-auth issue for **API tokens**: scoped to an org and a service, revocable, with an expiry, verifiable like the Ed25519 JWTs (JWKS). Ask about the relation to auth#20 capabilities
-- ⬜ Decide the MCP transport and auth approach against that issue (the design only; the build is phase C)
+- ✅ Raised **sertantai-auth#23** (API tokens: scoped to an org and a service, revocable, with an expiry, verifiable via JWKS; relation to auth#20 is an open question there)
+- ⬜ Decide the MCP transport and auth approach against auth#23 (the design only; the build is phase C)
 
 ## Notes
 

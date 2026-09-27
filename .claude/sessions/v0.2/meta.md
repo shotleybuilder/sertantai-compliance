@@ -39,7 +39,7 @@ to clash with v0.1 fixes merged forward.
 | # | Session | Status | Depends on | Key deliverables |
 |---|---------|--------|------------|------------------|
 | 1 | [Wizard on the corpus vocabulary](./01-wizard-corpus-vocabulary.md) | pending | — | Wizard options come from `GET /vocabulary`, not hard-coded lists (only 20 of 54 exist in any tree); #22 definitions only from in-force laws |
-| 2 | [API surface](./02-api-surface.md) | pending | — | OpenAPI spec for profile and evaluate; rate limiting (08 #11); API-token issue raised on sertantai-auth |
+| 2 | [API surface](./02-api-surface.md) | pending | — | OpenAPI spec for profile and evaluate; rate limiting (08 #11); MCP auth design against auth#23 |
 | 3 | [Engineering hygiene](./03-engineering-hygiene.md) | pending | — | CI builds and pushes images on `v*` tags (02 deferred); decide on `ChangeDetector.trigger_async/1`; dev-only CORS origins (08 #8) |
 | 4 | [Svelte 5 + GridLite 0.10 + Vite 8](../2026-09-25-svelte5-gridlite-upgrade.md) | pending | `gridlite-adapter-pglite` for kit ^0.10 | npm audit clean; drop `legacy-peer-deps`. Best done before the pilot. It is a big frontend change, and v0.1 fixes merged forward will conflict with it more the later it lands |
 
@@ -60,7 +60,7 @@ The order below is provisional. Re-rank it against the `pilot` issues once v0.1.
 
 | Item | Blocked on | Notes |
 |---|---|---|
-| **MCP server** (ash_ai) over the profile and screening actions | API tokens in sertantai-auth (issue to raise in session 2) | The actions already have descriptions written for AI clients (v0.1-04a). The OpenAPI spec (2) covers REST clients in the meantime |
+| **MCP server** (ash_ai) over the profile and screening actions | API tokens: sertantai-auth#23 | The actions already have descriptions written for AI clients (v0.1-04a). The OpenAPI spec (2) covers REST clients in the meantime |
 | Register access control and capabilities (fitness 04) | sertantai-auth#20, sertantai-hub#22; hub#13 (team members) | Today every user in an org can edit its register (08 #12) |
 | Granular and aggregate model alongside org-and-decompose | 7 | User, 2026-09-25: "in time we should be able to run both models" |
 | Agent error triage | real prod errors (v0.1-08a wiring) | See below |
@@ -95,7 +95,7 @@ daily summary (or nothing).
 Phase A (now)                 Phase B (Nov, pilot-ordered)        Phase C (upstream)
 01 corpus vocab ──┬──→ 05 context-first profiler
                   └──→ 09 what-if ←── legal#144
-02 API surface ──(auth API-token issue)──────────────────────────→ MCP ←── auth tokens
+02 API surface ──(auth#23 API tokens)──────────────────────────→ MCP ←── auth tokens
 03 hygiene
 04 Svelte 5 ←── adapter release
 v0.1-04 benchmark ──→ 06 gaps drill-down
@@ -124,7 +124,7 @@ v0.1-05 live ──→ 08 email digest
 
 ## Upstream
 
-- sertantai-auth: **API tokens for agents** (not raised yet; session 2), #20 capabilities
+- sertantai-auth: #23 API tokens for agents, #20 capabilities
 - sertantai-hub: #22 capability assignment UI, #13 team members
 - sertantai-legal: #161 screener data readiness, #144 confidence on each Match node, #143 plain-English definition summaries, #149 Interpretation Act missing, #106 shared PGLite IDB
 - GridLite: `gridlite-adapter-pglite` release for kit ^0.10

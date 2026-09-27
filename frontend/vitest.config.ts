@@ -9,7 +9,7 @@ export default defineConfig({
 			$app: path.resolve(__dirname, './src/test/mocks/app')
 		}
 	},
-	plugins: [svelte({ hot: !process.env.VITEST })],
+	plugins: [svelte()],
 	test: {
 		globals: true,
 		environment: 'jsdom',

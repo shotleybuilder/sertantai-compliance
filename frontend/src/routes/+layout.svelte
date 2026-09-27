@@ -4,9 +4,9 @@
 	import { queryClient } from '$lib/query/client';
 	import { browser } from '$app/environment';
 	import { adminAuth } from '$lib/stores/auth';
+	import type { Snippet } from 'svelte';
 
-	export let params: Record<string, string> = {}; // SvelteKit always passes this
-	$: void params;
+	let { children }: { children: Snippet } = $props();
 
 	// Restore auth from localStorage at module scope — runs during script
 	// initialization BEFORE any child onMount callbacks fire.
@@ -18,5 +18,5 @@
 </script>
 
 <QueryClientProvider client={queryClient}>
-	<slot />
+	{@render children()}
 </QueryClientProvider>

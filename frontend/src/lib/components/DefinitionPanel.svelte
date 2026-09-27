@@ -42,7 +42,11 @@
 
 {#if term}
 	<!-- Backdrop -->
-	<button class="fixed inset-0 z-40 bg-black/20 transition-opacity" on:click={onClose} tabindex="-1"
+	<button
+		class="fixed inset-0 z-40 bg-black/20 transition-opacity"
+		on:click={onClose}
+		tabindex="-1"
+		aria-label="Close definition panel"
 	></button>
 
 	<!-- Panel -->
@@ -64,6 +68,7 @@
 			</div>
 			<button
 				on:click={onClose}
+				aria-label="Close definition panel"
 				class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
 			>
 				<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

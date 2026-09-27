@@ -912,12 +912,12 @@
 <div class="flex h-full relative">
 	<!-- Mobile sidebar overlay -->
 	{#if sidebarVisible}
-		<!-- svelte-ignore a11y-click-events-have-key-events -->
-		<!-- svelte-ignore a11y-no-static-element-interactions -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="fixed inset-0 bg-black/30 z-30 lg:hidden"
 			on:click={() => (sidebarVisible = false)}
-		/>
+		></div>
 	{/if}
 
 	<!-- View Sidebar -->
@@ -1005,69 +1005,14 @@
 			</div>
 
 			<!-- GridLite Table -->
-			<GridLite
-				bind:this={gridRef}
-				{adapter}
-				onStateChange={handleStateChange}
-				config={{
-					id: 'browse',
-					columns,
-					defaultSorting: [{ column: 'name', direction: 'asc' }],
-					defaultVisibleColumns: activeVisibleColumns,
-					defaultColumnOrder: activeVisibleColumns,
-					pagination: { pageSize: 25 }
-				}}
-				features={{
-					columnVisibility: true,
-					columnResizing: true,
-					columnReordering: true,
-					filtering: true,
-					sorting: true,
-					pagination: true,
-					grouping: true,
-					globalSearch: true,
-					rowDetail: true
-				}}
-			>
-				<!-- Save View Buttons -->
-				<svelte:fragment slot="toolbar-start">
-					{#if hasActiveView}
-						<div class="inline-flex rounded-md shadow-sm">
-							<button
-								type="button"
-								on:click={handleUpdateView}
-								class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-l-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-							>
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-									/>
-								</svg>
-								Save View
-							</button>
-							<button
-								type="button"
-								on:click={handleSaveView}
-								class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-emerald-600 border-l border-emerald-500 rounded-r-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-							>
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M12 4v16m8-8H4"
-									/>
-								</svg>
-							</button>
-						</div>
-					{:else}
+			<!-- Save View Buttons -->
+			{#snippet toolbarStart()}
+				{#if hasActiveView}
+					<div class="inline-flex rounded-md shadow-sm">
 						<button
 							type="button"
-							on:click={handleSaveView}
-							class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+							on:click={handleUpdateView}
+							class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-l-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
 						>
 							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path
@@ -1079,79 +1024,120 @@
 							</svg>
 							Save View
 						</button>
-					{/if}
-				</svelte:fragment>
-
-				<!-- Custom cell rendering -->
-				<svelte:fragment slot="cell" let:value let:row let:column>
-					{#if column === 'family'}
-						{@const display = getFamilyDisplay(asStr(value))}
-						<span class="truncate">
-							{#if display.prefix}
-								<span
-									class="inline-block px-1 text-xs font-medium rounded mr-1 {display.prefix === 'HS'
-										? 'bg-blue-100 text-blue-700'
-										: display.prefix === 'E'
-											? 'bg-green-100 text-green-700'
-											: 'bg-purple-100 text-purple-700'}"
-								>
-									{display.prefix}
-								</span>
-							{/if}
-							{display.name}
-						</span>
-					{:else if column === 'title_en'}
-						{value || '-'}
-					{:else if column === 'leg_gov_uk_url'}
-						{#if value}
-							<a
-								href={String(value)}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="flex items-center justify-center w-full h-full text-blue-600 hover:text-blue-800 hover:underline"
-								>View</a
-							>
-						{:else}
-							<span class="text-gray-400">-</span>
-						{/if}
-					{:else if column === 'live'}
-						<span
-							class="inline-flex px-2 py-0.5 text-xs font-medium rounded {value === 'Live'
-								? 'bg-green-100 text-green-800'
-								: value === 'Revoked'
-									? 'bg-red-100 text-red-800'
-									: 'bg-gray-100 text-gray-800'}"
+						<button
+							type="button"
+							on:click={handleSaveView}
+							aria-label="Save as a new view"
+							class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-emerald-600 border-l border-emerald-500 rounded-r-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
 						>
-							{value || '-'}
-						</span>
-					{:else if column === 'function'}
-						{@const fns = parseFunctionKeys(row.function)}
-						{#if fns?.length}
-							<span class="flex flex-wrap gap-1">
-								{#each fns as fn}
-									<span
-										class="px-1.5 py-0.5 text-xs rounded {fn === 'Making'
-											? 'bg-green-100 text-green-700'
-											: fn === 'Amending'
-												? 'bg-yellow-100 text-yellow-700'
-												: fn === 'Revoking'
-													? 'bg-red-100 text-red-700'
-													: 'bg-gray-100 text-gray-700'}"
-									>
-										{fn}
-									</span>
-								{/each}
-							</span>
-						{:else}
-							<span class="text-gray-400">-</span>
-						{/if}
-					{:else}
-						{value ?? '-'}
-					{/if}
-				</svelte:fragment>
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M12 4v16m8-8H4"
+								/>
+							</svg>
+						</button>
+					</div>
+				{:else}
+					<button
+						type="button"
+						on:click={handleSaveView}
+						class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+							/>
+						</svg>
+						Save View
+					</button>
+				{/if}
+			{/snippet}
 
-				<!-- Custom row detail -->
-				<div slot="row-detail" let:row let:close={_close}>
+			<!-- Custom cell rendering -->
+			{#snippet cellSnippet({
+				value,
+				row,
+				column
+			}: {
+				value: unknown;
+				row: Record<string, unknown>;
+				column: string;
+			})}
+				{#if column === 'family'}
+					{@const display = getFamilyDisplay(asStr(value))}
+					<span class="truncate">
+						{#if display.prefix}
+							<span
+								class="inline-block px-1 text-xs font-medium rounded mr-1 {display.prefix === 'HS'
+									? 'bg-blue-100 text-blue-700'
+									: display.prefix === 'E'
+										? 'bg-green-100 text-green-700'
+										: 'bg-purple-100 text-purple-700'}"
+							>
+								{display.prefix}
+							</span>
+						{/if}
+						{display.name}
+					</span>
+				{:else if column === 'title_en'}
+					{value || '-'}
+				{:else if column === 'leg_gov_uk_url'}
+					{#if value}
+						<a
+							href={String(value)}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="flex items-center justify-center w-full h-full text-blue-600 hover:text-blue-800 hover:underline"
+							>View</a
+						>
+					{:else}
+						<span class="text-gray-400">-</span>
+					{/if}
+				{:else if column === 'live'}
+					<span
+						class="inline-flex px-2 py-0.5 text-xs font-medium rounded {value === 'Live'
+							? 'bg-green-100 text-green-800'
+							: value === 'Revoked'
+								? 'bg-red-100 text-red-800'
+								: 'bg-gray-100 text-gray-800'}"
+					>
+						{value || '-'}
+					</span>
+				{:else if column === 'function'}
+					{@const fns = parseFunctionKeys(row.function)}
+					{#if fns?.length}
+						<span class="flex flex-wrap gap-1">
+							{#each fns as fn}
+								<span
+									class="px-1.5 py-0.5 text-xs rounded {fn === 'Making'
+										? 'bg-green-100 text-green-700'
+										: fn === 'Amending'
+											? 'bg-yellow-100 text-yellow-700'
+											: fn === 'Revoking'
+												? 'bg-red-100 text-red-700'
+												: 'bg-gray-100 text-gray-700'}"
+								>
+									{fn}
+								</span>
+							{/each}
+						</span>
+					{:else}
+						<span class="text-gray-400">-</span>
+					{/if}
+				{:else}
+					{value ?? '-'}
+				{/if}
+			{/snippet}
+
+			<!-- Custom row detail -->
+			{#snippet rowDetail({ row }: { row: Record<string, unknown> | null; close: () => void })}
+				<div>
 					{#if row}
 						{@const r = asRec(row)}
 						{@const familyDisplay = getFamilyDisplay(asStr(r.family))}
@@ -1321,7 +1307,35 @@
 						</div>
 					{/if}
 				</div>
-			</GridLite>
+			{/snippet}
+
+			<GridLite
+				bind:this={gridRef}
+				{adapter}
+				onStateChange={handleStateChange}
+				toolbar-start={toolbarStart}
+				cell={cellSnippet}
+				row-detail={rowDetail}
+				config={{
+					id: 'browse',
+					columns,
+					defaultSorting: [{ column: 'name', direction: 'asc' }],
+					defaultVisibleColumns: activeVisibleColumns,
+					defaultColumnOrder: activeVisibleColumns,
+					pagination: { pageSize: 25 }
+				}}
+				features={{
+					columnVisibility: true,
+					columnResizing: true,
+					columnReordering: true,
+					filtering: true,
+					sorting: true,
+					pagination: true,
+					grouping: true,
+					globalSearch: true,
+					rowDetail: true
+				}}
+			/>
 		{/if}
 	</div>
 </div>

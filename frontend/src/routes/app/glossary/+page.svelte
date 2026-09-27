@@ -256,12 +256,12 @@
 <div class="flex h-full relative">
 	<!-- Mobile sidebar overlay -->
 	{#if sidebarVisible}
-		<!-- svelte-ignore a11y-click-events-have-key-events -->
-		<!-- svelte-ignore a11y-no-static-element-interactions -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="fixed inset-0 bg-black/30 z-30 lg:hidden"
 			on:click={() => (sidebarVisible = false)}
-		/>
+		></div>
 	{/if}
 
 	<!-- View Sidebar -->
@@ -326,10 +326,49 @@
 			</div>
 		{:else if ready && adapter}
 			<!-- GridLite Table -->
+			<!-- Save View Buttons -->
+			{#snippet toolbarStart()}
+				{#if hasActiveView}
+					<div class="inline-flex rounded-md shadow-sm">
+						<button
+							type="button"
+							on:click={handleUpdateView}
+							class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-l-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+						>
+							Save View
+						</button>
+						<button
+							type="button"
+							on:click={handleSaveView}
+							aria-label="Save as a new view"
+							class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-emerald-600 border-l border-emerald-500 rounded-r-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+						>
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M12 4v16m8-8H4"
+								/>
+							</svg>
+						</button>
+					</div>
+				{:else}
+					<button
+						type="button"
+						on:click={handleSaveView}
+						class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+					>
+						Save as View
+					</button>
+				{/if}
+			{/snippet}
+
 			<GridLite
 				bind:this={gridRef}
 				{adapter}
 				onStateChange={handleStateChange}
+				toolbar-start={toolbarStart}
 				config={{
 					id: 'glossary',
 					columns,
@@ -349,44 +388,7 @@
 					globalSearch: true,
 					rowDetail: true
 				}}
-			>
-				<!-- Save View Buttons -->
-				<svelte:fragment slot="toolbar-start">
-					{#if hasActiveView}
-						<div class="inline-flex rounded-md shadow-sm">
-							<button
-								type="button"
-								on:click={handleUpdateView}
-								class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-l-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-							>
-								Save View
-							</button>
-							<button
-								type="button"
-								on:click={handleSaveView}
-								class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-emerald-600 border-l border-emerald-500 rounded-r-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-							>
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M12 4v16m8-8H4"
-									/>
-								</svg>
-							</button>
-						</div>
-					{:else}
-						<button
-							type="button"
-							on:click={handleSaveView}
-							class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-						>
-							Save as View
-						</button>
-					{/if}
-				</svelte:fragment>
-			</GridLite>
+			/>
 		{/if}
 	</div>
 </div>

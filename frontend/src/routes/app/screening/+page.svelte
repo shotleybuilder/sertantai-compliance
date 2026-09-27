@@ -882,7 +882,7 @@
 													{#if groups.length === 0}
 														<p class="text-sm text-gray-400">No provisions found.</p>
 													{:else}
-														<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+														<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 														<div
 															class="space-y-3 max-h-96 overflow-y-auto"
 															on:click|stopPropagation
@@ -953,7 +953,7 @@
 													<!-- Applicability Tree tab -->
 												{:else if currentTab === 'tree'}
 													{#if prov.applicability_tree}
-														<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+														<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 														<div on:click|stopPropagation>
 															<TreeSummary
 																tree={prov.applicability_tree}
@@ -979,7 +979,7 @@
 													{#if actors.length === 0}
 														<p class="text-sm text-gray-400">No actor data available.</p>
 													{:else}
-														<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+														<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 														<div
 															class="space-y-1 max-h-96 overflow-y-auto"
 															on:click|stopPropagation
@@ -1069,6 +1069,7 @@
 			class="absolute inset-0 bg-black/50"
 			on:click={() => (showBulkConfirm = false)}
 			tabindex="-1"
+			aria-label="Cancel"
 		></button>
 		<div class="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
 			<h3 class="text-lg font-semibold text-gray-900 mb-2">Accept Strong Matches</h3>

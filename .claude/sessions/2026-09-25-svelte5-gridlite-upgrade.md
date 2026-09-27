@@ -21,12 +21,25 @@ Decided 2026-09-25 (user): **after v0.1**. Prod serves a static build, so the re
 ## Todo
 
 - ✅ Released `gridlite-adapter-pglite` 0.8.0 with peer kit `^0.10.0` (2026-09-27, svelte-gridlite-kit#41)
-- ⬜ Svelte 4 → 5 (runes, snippets, events); follow legal's migration (`479b367`, "Svelte 5 migration — runes, snippets, TanStack Query v6")
-- ⬜ GridLite kit 0.7.1 → 0.10.x and GridLite views; recheck the browse and glossary pages (PGLite adapter, live queries, views)
-- ⬜ Vite 5 → 8, vite-plugin-svelte 3 → 7, svelte-check 3 → 4, vitest 4 → 5; check `vite.config.ts` (`define`, `VITE_DEV_HOST`) and the Docker build
-- ⬜ Svelte-query 5 → 6 (needs Svelte ≥5.25; legal did this in `479b367`), prettier-plugin-svelte 3 → 4, Sentry `@sentry/svelte` stays 11 (supports 5)
-- ⬜ Drop `legacy-peer-deps` from `frontend/.npmrc` once the peer ranges line up (today it hides adapter ↔ kit mismatches)
+- ⬜ Step 2: Svelte 4 → 5 syntax (runes, `onclick`, snippets) in the remaining components, following legal's `479b367`; clear the 11 older lint warnings (`db as any`, misplaced disable comments)
+- ⬜ Step 3: browser check of GridLite 0.10 on browse and glossary (slots → snippets done in step 1: `toolbar-start`, `cell`, `row-detail`); PGLite adapter, live queries, views
+- ✅ Step 1, packages: Svelte 5.57, Vite 8.3, vite-plugin-svelte 7.3, vitest 5, svelte-check 4.7, kit 2.70.3, GridLite kit 0.10 + adapter 0.8.0; Tailwind moved from PostCSS to `@tailwindcss/vite`; lockfile regenerated; Docker build OK
+- ✅ svelte-query 5 → 6, prettier-plugin-svelte 3 → 4 (Sentry 11 unchanged)
+- ✅ `frontend/.npmrc` (`legacy-peer-deps`) removed, also from the Dockerfile
 - ⬜ `npm audit` is clean; frontend check, lint, tests and build pass; browser check of browse, glossary, screening, profile and changes
+
+## Step 1 notes (2026-09-27)
+
+- **Install:** the old lockfile pinned adapter 0.7.1, and `npm install` gave ERESOLVE even with the new ranges, so the lockfile was regenerated (`rm -rf node_modules package-lock.json && npm install`). It installs cleanly with no peer overrides.
+- **Tailwind on Vite 8:** with `@tailwindcss/postcss`, Vite 8 resolved `@import 'tailwindcss'` as a file (`ENOENT …/frontend/tailwindcss`). Switched to `@tailwindcss/vite` (the standard Tailwind v4 setup) and removed `postcss.config.js`, `postcss` and `autoprefixer`. The built CSS still has the utilities and the forms plugin base styles.
+- **Made it compile under Svelte 5 so the step-1 commit is green** (the pre-commit hook runs svelte-check):
+  - GridLite slots → snippets passed as attributes (legal's pattern), because GridLite's snippet props have hyphenated names;
+  - the root layout moved to runes (`children` + `{@render}`), which svelte-query 6's `QueryClientProvider` requires;
+  - `aria-label`s on icon-only buttons, `<div />` → `<div></div>`, and `svelte-ignore` codes renamed to Svelte 5's underscore form.
+- **Results:** svelte-check 0/0, lint 0 errors (11 older warnings), 142 tests, build OK, Docker image builds, Prettier clean.
+- **npm audit:** 3 low, all `cookie@0.6.0` pinned by the latest SvelteKit (2.70.3). No fix upstream (`--force` downgrades kit). Accepted: the app is an adapter-static build, so kit's server-side cookie code doesn't run in prod.
+- `vitest.config.ts`: dropped `svelte({ hot })` (the option was removed in vite-plugin-svelte 4+).
+- Possibly unused: `@tanstack/svelte-query` is only used for the provider; nothing calls `createQuery`. Check in step 2 and remove it if so.
 
 ## Target versions (npm, 2026-09-27)
 

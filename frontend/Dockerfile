@@ -5,9 +5,8 @@ FROM node:26-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files (.npmrc sets legacy-peer-deps for the gridlite adapter
-# peer range mismatch)
-COPY package.json package-lock.json .npmrc ./
+# Copy package files
+COPY package.json package-lock.json ./
 
 # Reproducible install from the committed lockfile (incl. devDependencies for build)
 RUN npm ci

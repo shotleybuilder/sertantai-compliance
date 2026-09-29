@@ -366,6 +366,27 @@ get_staged_files() {
 }
 
 # Main execution
+# UI changes should update the manual test schedule (warns, never blocks)
+check_ui_test_schedule() {
+    print_status "Checking the UI test schedule is kept up to date..."
+
+    UI_FILES=$(git diff --cached --name-only --diff-filter=ACMD | grep -E '^frontend/src/(routes|lib/components)/.*\.svelte$' || true)
+
+    if [ -z "$UI_FILES" ]; then
+        print_info "No UI components staged"
+        return 0
+    fi
+
+    if git diff --cached --name-only | grep -q '^docs/testing/ui-test-schedule.md$'; then
+        print_success "UI test schedule updated alongside UI changes"
+    else
+        print_warning "UI files changed but docs/testing/ui-test-schedule.md didn't"
+        print_info "If user-visible behaviour changed, add or edit cases and bump schedule_version"
+        print_info "(docs/testing/README.md). Refactors with no visible change need nothing."
+    fi
+    return 0
+}
+
 main() {
     print_header
 
@@ -405,6 +426,9 @@ main() {
     echo ""
 
     check_md_sensitive_info || EXIT_CODE=1
+    echo ""
+
+    check_ui_test_schedule
     echo ""
 
     # Final result

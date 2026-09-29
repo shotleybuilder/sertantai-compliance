@@ -69,9 +69,13 @@ release/0.1         ●──●──●──●──●──●      v0.1.0
 
 ## Cutting a release
 
-1. **CI is green on the release branch** (`release/X.Y`, or `main` before it
-   exists), and `mix screener.benchmark` for QQ shows no
-   unexplained regression against the previous run.
+1. **Checks pass:**
+   - CI is green on the release branch (`release/X.Y`, or `main` before it
+     exists).
+   - `mix screener.benchmark` for QQ shows no unexplained regression against
+     the previous run.
+   - Release candidates also need a passing **full** run of the
+     [UI test schedule](testing/README.md) against the commit being tagged.
 2. **Changelog.** Unreleased covers what users will notice.
 3. **Cut it** (from a clean checkout of that branch):
 
@@ -105,10 +109,14 @@ release/0.1         ●──●──●──●──●──●      v0.1.0
    - pulls and restarts;
    - logs the deploy to `~/infrastructure/docker/compliance-deploy-history.log`;
    - checks `https://compliance.sertantai.com/health` reports the new version.
-8. **Smoke test** as a real user, signing in through the hub:
-   - the screener results load for the org's profile;
-   - the change feed opens and CSV export downloads;
-   - the browse and glossary pages sync (Electric).
+8. **Smoke test** as a real user, signing in through the hub. Run the
+   read-only smoke tier of the [UI test schedule](testing/README.md) and
+   commit the run record:
+
+       ./scripts/testing/new-test-run.sh 0.1.0-rc.1 --tier smoke --env prod
+
+   It covers sign-in, screener results, the change feed and CSV export, and
+   browse and glossary syncing through Electric.
 
    `./scripts/deployment/deploy-prod.sh --check-only` shows the deployed version
    and recent deploys.

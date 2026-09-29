@@ -102,6 +102,13 @@ npm run dev | npm run check | npm run lint | npm run format | npm run test:run |
 ## Workflow
 
 - **Git hooks** (`.githooks/`): pre-commit runs format, compile, Credo, the Ash codegen check and svelte-check. Pre-push runs Dialyzer (blocking), Sobelow, `deps.audit`, the unused-deps check, and backend and frontend tests. CI (`.github/workflows/ci.yml`) runs the same checks plus ESLint and a build.
+- **Manual UI testing:** `docs/testing/ui-test-schedule.md` is a versioned
+  test schedule. Runs are recorded in `docs/testing/runs/` (see
+  `scripts/testing/new-test-run.sh`): smoke after each prod deploy, full
+  before each rc. **A commit that changes user-visible UI behaviour updates
+  the schedule in the same commit** (add, edit or remove cases, bump
+  `schedule_version`). The pre-commit hook warns if you don't. Details:
+  `docs/testing/README.md`.
 - **Never use `--no-verify`** for code changes. Use it only when the user explicitly says so, e.g. for docs-only commits.
 - **Commit locally as you go; push at the end of a session** (or when asked). Every push runs the slow hooks and then CI.
 - **Don't edit the working tree while a pre-push hook is running**: it tests the files on disk. Push in the foreground.

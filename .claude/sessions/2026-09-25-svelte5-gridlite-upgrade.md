@@ -22,7 +22,7 @@ Decided 2026-09-25 (user): **after v0.1**. Prod serves a static build, so the re
 
 - ✅ Released `gridlite-adapter-pglite` 0.8.0 with peer kit `^0.10.0` (2026-09-27, svelte-gridlite-kit#41)
 - ✅ Step 2: all 16 components on runes (`$props`, `$state`, `$derived`, `$effect`, `onclick`, `{@render}`), `$app/state`; no `svelte/legacy` imports; lint 0 warnings; unused svelte-query removed
-- ⬜ Step 3: full run of the UI test schedule (v1) → `docs/testing/runs/2026-09-29-svelte5-upgrade.md`. The schedule and process were created for this step: `docs/testing/README.md`
+- ⏳ Step 3: first pass done by Playwright (Firefox engine), 17 pass / 15 fail / 14 skip, **no upgrade regressions**: `docs/testing/runs/2026-09-29-svelte5-upgrade.md`. Remaining: the manual run of the skipped GridLite cases after the glossary fix
 - ✅ Step 1, packages: Svelte 5.57, Vite 8.3, vite-plugin-svelte 7.3, vitest 5, svelte-check 4.7, kit 2.70.3, GridLite kit 0.10 + adapter 0.8.0; Tailwind moved from PostCSS to `@tailwindcss/vite`; lockfile regenerated; Docker build OK
 - ✅ svelte-query 5 → 6, prettier-plugin-svelte 3 → 4 (Sentry 11 unchanged)
 - ✅ `frontend/.npmrc` (`legacy-peer-deps`) removed, also from the Dockerfile

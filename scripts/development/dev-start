@@ -53,6 +53,16 @@ TABEOF
     fi
 }
 
+# PIDs of this project's Phoenix server. Its command line is just
+# "mix phx.server" (legal's is identical), so match on the working directory.
+compliance_backend_pids() {
+    local pid
+    for pid in $(pgrep -f "mix phx.server" || true); do
+        [ "$(readlink "/proc/$pid/cwd" 2>/dev/null)" = "$PROJECT_ROOT/backend" ] && echo "$pid"
+    done
+    return 0
+}
+
 echo "Starting sertantai-compliance development servers..."
 echo "Project root: $PROJECT_ROOT"
 echo ""
@@ -69,7 +79,7 @@ if [ ! -f "$FRONTEND_DIR/package.json" ]; then
 fi
 
 # Check if compliance servers are already running
-if pgrep -af "phx.server" | grep -q "sertantai.compliance"; then
+if [ -n "$(compliance_backend_pids)" ]; then
     echo "Phoenix backend is already running!"
     echo "Stop it first with: dev-stop"
     exit 1

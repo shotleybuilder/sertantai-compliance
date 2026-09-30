@@ -57,6 +57,8 @@ into a versioned section. See `docs/RELEASING.md`.
   was added to the definitions data.
 - Sign out now returns you to the SertantAI sign-in page. Before, it cleared
   your session but left you on a "Sign In Required" screen.
+- The Stats page loads its compliance assessment summary instead of failing
+  quietly.
 
 ### Security
 

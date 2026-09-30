@@ -10,6 +10,8 @@ defmodule SertantaiCompliance.Sync.Templates.ComplianceMetrics do
   Persisted to DB on periodic flush.
   """
 
+  use GenServer
+
   alias SertantaiCompliance.Sync.Templates.WebhookEvent
 
   require Logger
@@ -17,13 +19,15 @@ defmodule SertantaiCompliance.Sync.Templates.ComplianceMetrics do
   # ETS table for in-memory metrics
   @table :compliance_metrics
 
-  @doc "Initialize the ETS metrics table (call from Application supervisor)."
-  def init do
-    if :ets.whereis(@table) == :undefined do
-      :ets.new(@table, [:named_table, :public, :set])
-    end
+  @doc "Starts the process that owns the metrics table (application supervisor)."
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  end
 
-    :ok
+  @impl true
+  def init(_opts) do
+    :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
+    {:ok, nil}
   end
 
   @doc """

@@ -26,6 +26,8 @@ defmodule SertantaiCompliance.Application do
        query: Application.get_env(:sertantai_compliance, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SertantaiCompliance.PubSub},
       SertantaiCompliance.Auth.JwksClient,
+      # Owns the compliance_metrics ETS table read by GET /api/screening/compliance-metrics
+      SertantaiCompliance.Sync.Templates.ComplianceMetrics,
       SertantaiComplianceWeb.Endpoint
     ]
 

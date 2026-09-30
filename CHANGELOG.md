@@ -65,6 +65,9 @@ into a versioned section. See `docs/RELEASING.md`.
   loaded, instead of "Loading..." forever.
 - Resetting a law on the Screening page now says "reset", not "excluded".
 - The Accept Strong Matches dialog closes with the Escape key.
+- Browse: the Link column and the law detail link go to the law's official
+  source again (legislation.gov.uk, or the state legislation site for
+  Australian laws).
 
 ### Security
 

@@ -60,8 +60,18 @@
 		'latest_amend_date_month',
 		'latest_rescind_date',
 		'latest_rescind_date_year',
-		'latest_rescind_date_month'
+		'latest_rescind_date_month',
+		'source_url'
 	];
+	/** Link label for a law's source: its site (legislation.gov.uk, legislation.nsw.gov.au, …) */
+	function sourceHost(url: string): string {
+		try {
+			return new URL(url).hostname.replace(/^www\./, '');
+		} catch {
+			return 'Source';
+		}
+	}
+
 	let BROWSE_SQL = $derived(
 		`SELECT ${BROWSE_COLUMNS.join(', ')} FROM laws WHERE country = '${$selectedCountry}'`
 	);
@@ -244,7 +254,7 @@
 				return n != null ? (monthNames[n - 1] ?? '-') : '-';
 			}
 		},
-		{ name: 'leg_gov_uk_url', label: 'Link', width: 70, dataType: 'text' }
+		{ name: 'source_url', label: 'Link', width: 70, dataType: 'text' }
 	];
 
 	// Date boundary helpers for view filters
@@ -1086,7 +1096,7 @@
 					</span>
 				{:else if column === 'title_en'}
 					{value || '-'}
-				{:else if column === 'leg_gov_uk_url'}
+				{:else if column === 'source_url'}
 					{#if value}
 						<a
 							href={String(value)}
@@ -1184,14 +1194,14 @@
 											>
 										{/each}
 									{/if}
-									{#if r.leg_gov_uk_url}
+									{#if r.source_url}
 										<a
-											href={String(r.leg_gov_uk_url)}
+											href={String(r.source_url)}
 											target="_blank"
 											rel="noopener noreferrer"
 											class="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-blue-600 hover:text-blue-800 bg-blue-50 rounded"
 										>
-											legislation.gov.uk
+											{sourceHost(String(r.source_url))}
 											<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"
 												><path
 													stroke-linecap="round"

@@ -1,7 +1,7 @@
 ---
-schedule_version: 1
-updated: 2026-09-29
-app_version: 0.2.0-dev (Svelte 5, commit b70515c)
+schedule_version: 2
+updated: 2026-09-30
+app_version: 0.2.0-dev (Svelte 5, v0.1 fixes #26-#32 merged)
 ---
 
 # UI Test Schedule
@@ -70,8 +70,10 @@ runs are recorded and when to change it: [README.md](./README.md).
    org name, your email and `v<version>`, matching `/health`.
 
 ### NAV-02 · Mobile layout [full]
-1. At a width under 640 px, visit each /app page.
-2. Expected: the mobile nav works, there's no horizontal scrolling, and long
+1. At widths of 390 px and 800 px, visit each /app page.
+2. Expected: below 1024 px the compact nav shows, and scrolls sideways within
+   its own row; the page itself never scrolls sideways. The org and
+   **Sign out** stay visible (the email shows only on wide screens). Long
    pages (Stats in particular) scroll to the bottom.
 
 ### NAV-03 · Changes badge [full]
@@ -217,7 +219,8 @@ runs are recorded and when to change it: [README.md](./README.md).
 
 ### CHG-06 · Backend down [full]
 1. Stop the backend and open Changes.
-2. Expected: an error message, not an endless "Loading…".
+2. Expected: an error message with **Retry**, not an endless "Loading…".
+3. Start the backend and click **Retry**: the changes load.
 
 ## ACT: activity log
 
@@ -281,7 +284,8 @@ runs are recorded and when to change it: [README.md](./README.md).
 2. Expected: all of them work, and Link is filled in for laws that have a URL.
 
 ### BRW-03 · Row detail [full]
-1. Open a row's detail.
+1. In an ungrouped view (clear Group), open a row's detail. Grouped rows don't
+   open detail in GridLite 0.7 (`release/0.1`).
 2. Expected: Year, Number, Type, Family, SI code, Extent, Region, the dates,
    and a working link.
 

@@ -132,6 +132,31 @@ export async function seedDefaultViews(
 	return result;
 }
 
+/**
+ * Delete persisted views that were once code defaults and have been retired.
+ *
+ * Only names listed in `retired` are touched: anything else in the store may
+ * be a view the user saved, and must survive (#32).
+ */
+export async function pruneRetiredViews(
+	retired: readonly string[],
+	existing: SavedView[],
+	actions: Pick<ViewActions, 'delete'>
+): Promise<string[]> {
+	const retiredNames = new Set(retired);
+	const pruned: string[] = [];
+	for (const view of existing) {
+		if (!retiredNames.has(view.name)) continue;
+		try {
+			await actions.delete(view.id);
+			pruned.push(view.name);
+		} catch {
+			/* already gone */
+		}
+	}
+	return pruned;
+}
+
 export interface GroupDef {
 	name: string;
 	icon?: string;

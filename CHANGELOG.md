@@ -59,6 +59,17 @@ into a versioned section. See `docs/RELEASING.md`.
   your session but left you on a "Sign In Required" screen.
 - The Stats page loads its compliance assessment summary instead of failing
   quietly.
+- On phones and narrow windows the top bar fits the screen and Sign out stays
+  visible; the page menu scrolls sideways instead of the whole page.
+- The Changes page shows an error with a Retry button when changes can't be
+  loaded, instead of "Loading..." forever.
+- Resetting a law on the Screening page now says "reset", not "excluded".
+- The Accept Strong Matches dialog closes with the Escape key.
+- Browse: the Link column and the law detail link go to the law's official
+  source again (legislation.gov.uk, or the state legislation site for
+  Australian laws).
+- Glossary: you can save your own views again, and they are kept when you come
+  back to the page.
 
 ### Security
 

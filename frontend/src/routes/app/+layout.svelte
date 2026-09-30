@@ -98,7 +98,7 @@
 							<a href="/app/screening" class="text-xl font-bold text-gray-900">SertantAI</a>
 						</div>
 
-						<div class="hidden sm:ml-8 sm:flex sm:space-x-4">
+						<div class="hidden lg:ml-8 lg:flex lg:space-x-4">
 							{#each navItems as item}
 								<a
 									href={item.href}
@@ -121,19 +121,26 @@
 						</div>
 					</div>
 
-					<div class="flex items-center gap-3">
+					<!-- On small screens only the org and Sign out stay; email and version need room -->
+					<div class="flex items-center gap-3 min-w-0">
 						{#if user.org_name}
 							<span
-								class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"
+								class="truncate max-w-[10rem] px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"
 							>
 								{user.org_name}
 							</span>
 						{/if}
-						<span class="text-sm text-gray-500">{user.email || user.name || ''}</span>
-						<span class="text-xs text-gray-400" title="SertantAI Compliance version"
-							>v{appVersion}</span
+						<span class="hidden xl:inline text-sm text-gray-500"
+							>{user.email || user.name || ''}</span
 						>
-						<button onclick={signOut} class="text-sm text-gray-500 hover:text-gray-700">
+						<span
+							class="hidden sm:inline text-xs text-gray-400"
+							title="SertantAI Compliance version">v{appVersion}</span
+						>
+						<button
+							onclick={signOut}
+							class="whitespace-nowrap text-sm text-gray-500 hover:text-gray-700"
+						>
 							Sign out
 						</button>
 					</div>
@@ -141,12 +148,12 @@
 			</div>
 
 			<!-- Mobile Navigation -->
-			<div class="sm:hidden border-t border-gray-200 py-2 px-4">
+			<div class="lg:hidden border-t border-gray-200 py-2 px-4 overflow-x-auto">
 				<div class="flex space-x-2">
 					{#each navItems as item}
 						<a
 							href={item.href}
-							class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md
+							class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap px-3 py-2 text-sm font-medium rounded-md
 							{isActive(pathname, item.href)
 								? 'bg-emerald-100 text-emerald-700'
 								: 'text-gray-600 hover:bg-gray-100'}"

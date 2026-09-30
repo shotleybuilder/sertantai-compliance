@@ -30,9 +30,15 @@
 	import {
 		seedDefaultViews as seedDefaults,
 		seedDefaultGroups,
-		assignViewsToGroups
+		assignViewsToGroups,
+		pruneRetiredViews
 	} from '$lib/views/seed-defaults';
-	import { defaultViews, defaultGroupDefs, getViewGroupName } from '$lib/views/glossary-views';
+	import {
+		defaultViews,
+		defaultGroupDefs,
+		getViewGroupName,
+		retiredViewNames
+	} from '$lib/views/glossary-views';
 	import { getPglite, type PGLiteWithExtensions } from '$lib/pglite/client';
 	import { startSync, syncStatus } from '$lib/pglite/sync';
 	// ── State ──────────────────────────────────────────────────────
@@ -124,17 +130,8 @@
 
 		const { defaultViewId } = await seedDefaults(defaultViews, currentViews, actions);
 
-		// Prune persisted views that no longer exist in code defaults
-		const defaultNames = new Set(defaultViews.map((v) => v.name));
-		for (const view of currentViews) {
-			if (!defaultNames.has(view.name)) {
-				try {
-					await actions.delete(view.id);
-				} catch {
-					/* already gone */
-				}
-			}
-		}
+		// Remove retired default views; views the user saved are kept
+		await pruneRetiredViews(retiredViewNames, currentViews, actions);
 
 		// Seed groups and assign views to groups
 		let currentGroups: ViewGroup[] = [];
@@ -391,7 +388,12 @@
 
 <!-- Save View Modal -->
 {#if showSaveModal && viewStore && capturedConfig}
-	<SaveViewModal {viewStore} config={capturedConfig} on:close={() => (showSaveModal = false)} />
+	<SaveViewModal
+		bind:open={showSaveModal}
+		{viewStore}
+		config={capturedConfig}
+		on:close={() => (showSaveModal = false)}
+	/>
 {/if}
 
 <style>

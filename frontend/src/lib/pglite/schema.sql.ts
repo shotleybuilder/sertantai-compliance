@@ -183,7 +183,7 @@ CREATE INDEX IF NOT EXISTS idx_laws_making_classification ON laws (making_classi
  * Drops and recreates if schema version has changed (e.g. column type fixes).
  * Otherwise safe to call multiple times — uses IF NOT EXISTS.
  */
-export const SCHEMA_VERSION = 21; // Add citation column + Citations view
+export const SCHEMA_VERSION = 22; // Definitions shape: explicit columns list (#26)
 
 export async function initSchema(pg: {
 	exec: (sql: string) => Promise<unknown>;

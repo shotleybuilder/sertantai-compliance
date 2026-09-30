@@ -110,7 +110,7 @@ Other observations:
   different populations (all register rows vs evaluated laws in the
   register), but the labels suggest the same thing.
 - Hub `/api/auth/login` 401 responses include Ash error internals
-  (`reason`). Belongs to sertantai-hub.
+  (`reason`), passed through from sertantai-auth: sertantai-hub#24.
 - `vite.config.ts`: `optimizeDeps.esbuildOptions` is deprecated in Vite 8;
   use `rolldownOptions`.
 - Step 1 gave the Accept-dialog backdrop `aria-label="Cancel"`, which

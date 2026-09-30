@@ -203,6 +203,19 @@ const businessViews: ViewDef[] = [
 
 export const defaultViews: ViewDef[] = [...patternsInLaw, ...metadataViews, ...businessViews];
 
+/**
+ * Default views that have been removed from the code. The seeder deletes these
+ * by name; add a view here when you remove it from the defaults above.
+ */
+export const retiredViewNames: readonly string[] = [
+	'Recently Updated',
+	'H&S Focus',
+	'Environmental Focus',
+	'Core BMS Terms',
+	'New Starter Kit',
+	'Due Diligence & Governance'
+];
+
 // View → Group mapping
 export const viewGroupMapping: Record<string, string> = {};
 for (const v of patternsInLaw) viewGroupMapping[v.name] = 'patterns';

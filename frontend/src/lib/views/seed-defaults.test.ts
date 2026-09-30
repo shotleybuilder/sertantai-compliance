@@ -5,7 +5,13 @@
  * pageSize), persisted views in PGLite must be updated on page load.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { seedDefaultViews, _configsEqual, type ViewDef, type ViewActions } from './seed-defaults';
+import {
+	seedDefaultViews,
+	pruneRetiredViews,
+	_configsEqual,
+	type ViewDef,
+	type ViewActions
+} from './seed-defaults';
 import type { ViewConfig, SavedView } from '@shotleybuilder/svelte-gridlite-views';
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -275,5 +281,27 @@ describe('seedDefaultViews', () => {
 		const result = await seedDefaultViews(defaults, existing, actions);
 
 		expect(result.updated).toEqual(['LAT Cleanup']);
+	});
+});
+
+describe('pruneRetiredViews (#32)', () => {
+	it('deletes retired default views and keeps views the user saved', async () => {
+		const retired = makeSavedView('H&S Focus', makeConfig(), 'retired-1');
+		const current = makeSavedView('All Definitions', makeConfig(), 'default-1');
+		const mine = makeSavedView('My COSHH terms', makeConfig(), 'user-1');
+		const actions = { delete: vi.fn().mockResolvedValue(undefined) };
+
+		const pruned = await pruneRetiredViews(['H&S Focus'], [retired, current, mine], actions);
+
+		expect(pruned).toEqual(['H&S Focus']);
+		expect(actions.delete).toHaveBeenCalledTimes(1);
+		expect(actions.delete).toHaveBeenCalledWith('retired-1');
+	});
+
+	it('ignores a view that is already gone', async () => {
+		const retired = makeSavedView('Recently Updated', makeConfig(), 'retired-2');
+		const actions = { delete: vi.fn().mockRejectedValue(new Error('not found')) };
+
+		await expect(pruneRetiredViews(['Recently Updated'], [retired], actions)).resolves.toEqual([]);
 	});
 });

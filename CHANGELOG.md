@@ -68,6 +68,8 @@ into a versioned section. See `docs/RELEASING.md`.
 - Browse: the Link column and the law detail link go to the law's official
   source again (legislation.gov.uk, or the state legislation site for
   Australian laws).
+- Glossary: you can save your own views again, and they are kept when you come
+  back to the page.
 
 ### Security
 

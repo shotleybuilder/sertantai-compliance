@@ -3,14 +3,15 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { adminAuth } from '$lib/stores/auth';
+	import { safeDest, DEFAULT_DEST } from '$lib/auth/redirect';
 
 	let status: 'loading' | 'success' | 'error' = 'loading';
 	let errorMessage = '';
-	let dest = '/browse';
+	let dest = DEFAULT_DEST;
 
 	onMount(() => {
-		// Where to go after auth — defaults to /browse
-		dest = $page.url.searchParams.get('dest') || '/browse';
+		// Where to go after auth — a same-site path, defaults to /browse
+		dest = safeDest($page.url.searchParams.get('dest'));
 
 		const error = $page.url.searchParams.get('error');
 		if (error) {

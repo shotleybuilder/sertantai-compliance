@@ -55,6 +55,8 @@ into a versioned section. See `docs/RELEASING.md`.
   requirements or conditions set elsewhere.
 - The legal glossary loads again. It showed no definitions after a new field
   was added to the definitions data.
+- Sign out now returns you to the SertantAI sign-in page. Before, it cleared
+  your session but left you on a "Sign In Required" screen.
 
 ### Security
 

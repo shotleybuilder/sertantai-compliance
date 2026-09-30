@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { adminAuth } from '$lib/stores/auth';
-	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
 	import { authFetch } from '$lib/api/client';
 
@@ -57,7 +56,8 @@
 
 	function signOut() {
 		adminAuth.clear();
-		goto(`${HUB_URL}/login`);
+		// The hub is another site: goto() only navigates within this app
+		window.location.href = `${HUB_URL}/login`;
 	}
 </script>
 

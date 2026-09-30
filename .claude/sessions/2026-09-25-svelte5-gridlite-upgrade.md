@@ -88,6 +88,8 @@ enables:
 # Session: Svelte 5 + GridLite 0.10 + Vite 8 Upgrade (SUSPENDED)
 
 > **Suspended 2026-09-29**: the upgrade (steps 1-2) is done and the automated first pass found no regressions. It's waiting on the v0.1 bug fixes (#26 first, which unblocks the glossary cases). Resume to fix the pushState warning, do the manual run of the skipped cases, and close.
+>
+> **Ready to resume (2026-09-30):** #26-#32 and #35 are fixed on `release/0.1` and merged into `main` (Svelte 4→5 conflicts resolved by hand; Playwright rechecked on `main`). Schedule is now v2.
 
 > Resumed 2026-09-27: the first v0.2 session. v0.1 is isolated on `release/0.1`, so "after v0.1" no longer applies, and doing it before the pilot keeps merge-forward conflicts small. Work on `main`; v0.1 fixes stay on Svelte 4 on `release/0.1`.
 
@@ -105,9 +107,9 @@ Decided 2026-09-25 (user): **after v0.1**. Prod serves a static build, so the re
 - ✅ Released `gridlite-adapter-pglite` 0.8.0 with peer kit `^0.10.0` (2026-09-27, svelte-gridlite-kit#41)
 - ✅ Step 2: all 16 components on runes (`$props`, `$state`, `$derived`, `$effect`, `onclick`, `{@render}`), `$app/state`; no `svelte/legacy` imports; lint 0 warnings; unused svelte-query removed
 - ✅ Step 3a: automated first pass (Playwright, Firefox engine): 17 pass / 15 fail / 14 skip, **no upgrade regressions** → `docs/testing/runs/2026-09-29-svelte5-upgrade.md`; bugs raised as #26-#34
-- ⬜ Step 3b: manual run of the skipped cases (GridLite interactions, PRO-04, change feed with data), after #26 is fixed and merged forward (new run sheet)
+- ⬜ Step 3b: manual run of the skipped cases (GridLite interactions, PRO-04, change feed with data) on schedule v2 (new run sheet). Unblocked: #26 fixed 2026-09-30. BRW-03 needs an ungrouped view (svelte-gridlite-kit#42)
 - ⬜ Fix `history.pushState` in the profile wizard → `pushState` from `$app/navigation` (PRO-03/07 warning; main only)
-- ⬜ Schedule v2: SCR-05, STA-01, CHG-03 and NAV-02 wording corrections from the run's Findings
+- ⬜ Schedule wording corrections from the run's Findings: SCR-05, STA-01, CHG-03 (v2 on 2026-09-30 already did NAV-02, CHG-06, BRW-03)
 - ✅ Step 1, packages: Svelte 5.57, Vite 8.3, vite-plugin-svelte 7.3, vitest 5, svelte-check 4.7, kit 2.70.3, GridLite kit 0.10 + adapter 0.8.0; Tailwind moved from PostCSS to `@tailwindcss/vite`; lockfile regenerated; Docker build OK
 - ✅ prettier-plugin-svelte 3 → 4 (Sentry 11 unchanged); svelte-query went to 6 in step 1, then was removed as unused in step 2
 - ✅ `frontend/.npmrc` (`legacy-peer-deps`) removed, also from the Dockerfile

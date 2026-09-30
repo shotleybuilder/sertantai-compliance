@@ -33,6 +33,8 @@ What stays in v0.1:
 
 Pilot bugs are fixed in v0.1 as rc.N. Anything else goes to **[v0.2](../v0.2/meta.md)**.
 
+**Pre-rc bug fixes (2026-09-30):** the first UI test run (`docs/testing/runs/2026-09-29-svelte5-upgrade.md`) found bugs in v0.1 code. All the v0.1 ones are fixed on `release/0.1` and merged forward, with CI green: #26 glossary sync (explicit shape columns; local `SCHEMA_VERSION` 22, so saved views reset once), #27 sign-out and callback `dest`, #28 compliance-metrics 500, #29 mobile header, #30 Changes error, Reset toast and dialog Escape, #31 Browse Link (`source_url`), #32 glossary saved views (and the Save View modal never opened), #35 PGLite flush errors. In the CHANGELOG under Unreleased. Still open: #25 (deploy after 03), #36 (Stats card promises data nothing supplies; hiding it would be a small v0.1 fix, undecided), svelte-gridlite-kit#42 (grouped rows don't open row detail).
+
 **Branch (2026-09-27):** v0.1 code lives on **`release/0.1`**, cut from `main` at the end of v0.1 development. The rcs, v0.1.0 and any patches are tagged there. `main` is now v0.2. Every v0.1 code change, including the 03 stopgap and the 06 jurisdiction gate, is committed to `release/0.1` and then merged forward into `main`. This file and the other session docs are still edited on `main`. See `docs/RELEASING.md`, under "Branches".
 
 **Decision date: 10 Oct** (replaces the context-first go/no-go). If legal#133/#27 aren't on track for rc.1 by 17 Oct, decide the fallback with legal: ship on the partitioned table with partial data, or use the 03 stopgap (the proxy rewrites `legal_register` to `uk_lrt`).

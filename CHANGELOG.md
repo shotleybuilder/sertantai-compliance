@@ -59,6 +59,8 @@ into a versioned section. See `docs/RELEASING.md`.
   your session but left you on a "Sign In Required" screen.
 - The Stats page loads its compliance assessment summary instead of failing
   quietly.
+- On phones and narrow windows the top bar fits the screen and Sign out stays
+  visible; the page menu scrolls sideways instead of the whole page.
 
 ### Security
 

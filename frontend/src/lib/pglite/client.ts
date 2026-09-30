@@ -33,6 +33,41 @@ export type PGLiteWithExtensions = PGlite & {
  */
 const DB_VERSION = 2; // v1 = PGLite 0.3, v2 = PGLite 0.5
 
+/**
+ * An Emscripten filesystem error, as thrown by PGLite's IndexedDB flush.
+ * These are plain objects (`{ name: 'ErrnoError', errno, stack }`), not Errors.
+ */
+export function isFsErrnoError(reason: unknown): boolean {
+	return (
+		typeof reason === 'object' &&
+		reason !== null &&
+		(reason as { name?: unknown }).name === 'ErrnoError' &&
+		typeof (reason as { errno?: unknown }).errno === 'number'
+	);
+}
+
+/**
+ * With `relaxedDurability`, PGLite flushes to IndexedDB without awaiting the
+ * flush, so a failed flush is an unhandled rejection (#35). It fails with
+ * ENOENT when Postgres deletes a file (temp or stats files) while the flush is
+ * walking the filesystem. Nothing is lost: the next flush diffs the whole
+ * filesystem again. Mark only these as handled, before error tracking sees them.
+ */
+function guardRelaxedFlushErrors(): void {
+	window.addEventListener(
+		'unhandledrejection',
+		(event) => {
+			if (!isFsErrnoError(event.reason)) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			console.debug('[PGLite] Background IndexedDB flush skipped (errno', event.reason.errno + ')');
+		},
+		{ capture: true }
+	);
+}
+
+if (browser) guardRelaxedFlushErrors();
+
 let pgliteInstance: PGLiteWithExtensions | null = null;
 let pglitePromise: Promise<PGLiteWithExtensions> | null = null;
 let currentDbName: string | null = null;

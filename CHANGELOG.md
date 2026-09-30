@@ -53,6 +53,8 @@ into a versioned section. See `docs/RELEASING.md`.
 - Place types such as premises, ships and aircraft are now matched correctly.
 - Saving the profile wizard no longer clears certifications, contract
   requirements or conditions set elsewhere.
+- The legal glossary loads again. It showed no definitions after a new field
+  was added to the definitions data.
 
 ### Security
 

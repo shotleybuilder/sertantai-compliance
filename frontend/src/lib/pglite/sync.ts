@@ -16,6 +16,7 @@ import { initSchema, SCHEMA_VERSION } from './schema.sql';
 import { ELECTRIC_URL } from '$lib/electric/client';
 import { electricFetchClient } from '$lib/electric/fetch-client';
 import { getAuthToken } from '$lib/stores/auth';
+import { DEFINITIONS_COLUMN_METADATA } from './definitions-columns';
 
 // ── Column Sets ─────────────────────────────────────────────────────────────
 
@@ -128,6 +129,13 @@ const ADMIN_COLUMNS: string[] = ALL_COLUMNS.filter((col) => !HEAVY_JSONB_COLUMNS
 
 /** Exported for use by shape recovery in error handlers */
 export { ADMIN_COLUMNS };
+
+/**
+ * Definitions columns: exactly the local `definitions` table. Without an
+ * explicit list the shape syncs every upstream column, and rows stop fitting
+ * the local table as soon as legal adds one (#26).
+ */
+export const DEFINITIONS_COLUMNS: string[] = DEFINITIONS_COLUMN_METADATA.map((c) => c.name);
 
 // ── Auth Helpers ────────────────────────────────────────────────────────────
 
@@ -280,7 +288,8 @@ export async function startSync(): Promise<void> {
 				url: `${ELECTRIC_URL}/v1/shape`,
 				fetchClient: electricFetchClient,
 				params: {
-					table: 'legislative_definitions'
+					table: 'legislative_definitions',
+					columns: DEFINITIONS_COLUMNS
 				}
 			},
 			table: 'definitions',

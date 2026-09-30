@@ -285,7 +285,7 @@ runs are recorded and when to change it: [README.md](./README.md).
 
 ### BRW-03 · Row detail [full]
 1. In an ungrouped view (clear Group), open a row's detail. Grouped rows don't
-   open detail in GridLite 0.7 (`release/0.1`).
+   open detail (svelte-gridlite-kit#42, GridLite 0.7 and 0.10).
 2. Expected: Year, Number, Type, Family, SI code, Extent, Region, the dates,
    and a working link.
 

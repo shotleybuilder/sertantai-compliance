@@ -34,6 +34,7 @@
 	let summary: ChangeSummary | null = null;
 	let changes: ChangeEvent[] = [];
 	let loading = true;
+	let error: string | null = null;
 	let filter: string | null = null;
 	let decidingId: string | null = null;
 	let decisionReason = '';
@@ -95,17 +96,24 @@
 
 	async function load() {
 		loading = true;
-		const [summaryRes, changesRes] = await Promise.all([
-			authFetch(`${API_URL}/api/screening/changes/summary`),
-			authFetch(`${API_URL}/api/screening/changes${filter ? `?materiality=${filter}` : ''}`)
-		]);
+		error = null;
+		try {
+			const [summaryRes, changesRes] = await Promise.all([
+				authFetch(`${API_URL}/api/screening/changes/summary`),
+				authFetch(`${API_URL}/api/screening/changes${filter ? `?materiality=${filter}` : ''}`)
+			]);
+			if (!summaryRes.ok || !changesRes.ok) {
+				throw new Error(`Server returned ${summaryRes.ok ? changesRes.status : summaryRes.status}`);
+			}
 
-		if (summaryRes.ok) summary = await summaryRes.json();
-		if (changesRes.ok) {
+			summary = await summaryRes.json();
 			const data = await changesRes.json();
 			changes = data.changes || [];
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to load changes';
+		} finally {
+			loading = false;
 		}
-		loading = false;
 	}
 
 	async function decide(eventId: string, decision: string) {
@@ -151,6 +159,17 @@
 
 		{#if loading && !summary}
 			<p class="text-gray-500">Loading...</p>
+		{:else if error}
+			<div class="rounded-lg bg-red-50 border border-red-200 p-6 text-center">
+				<h2 class="text-lg font-semibold text-red-800 mb-2">Couldn't load changes</h2>
+				<p class="text-sm text-red-600 mb-4">{error}</p>
+				<button
+					on:click={load}
+					class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700"
+				>
+					Retry
+				</button>
+			</div>
 		{:else if summary}
 			<!-- Summary cards -->
 			{@const matCards = [

@@ -61,6 +61,10 @@ into a versioned section. See `docs/RELEASING.md`.
   quietly.
 - On phones and narrow windows the top bar fits the screen and Sign out stays
   visible; the page menu scrolls sideways instead of the whole page.
+- The Changes page shows an error with a Retry button when changes can't be
+  loaded, instead of "Loading..." forever.
+- Resetting a law on the Screening page now says "reset", not "excluded".
+- The Accept Strong Matches dialog closes with the Escape key.
 
 ### Security
 

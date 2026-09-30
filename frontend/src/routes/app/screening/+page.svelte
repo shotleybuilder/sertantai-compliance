@@ -135,7 +135,7 @@
 					const previousStatus = match.current_status;
 					match.current_status = status;
 					result = { ...result, matches: [...result.matches] };
-					showUndoToast(lawName, status === 'yes' ? 'Added' : 'Excluded', previousStatus);
+					showUndoToast(lawName, statusActionLabels[status] ?? 'Updated', previousStatus);
 				}
 			}
 		} finally {
@@ -212,6 +212,13 @@
 	}
 
 	// ── Undo ────────────────────────────────────────────────────────
+
+	/** Toast wording for each status a law can be set to */
+	const statusActionLabels: Record<string, string> = {
+		yes: 'Added',
+		excluded: 'Excluded',
+		unreviewed: 'Reset'
+	};
 
 	function showUndoToast(lawName: string, action: string, previousStatus: string) {
 		if (undoTimer) clearTimeout(undoTimer);
@@ -1062,6 +1069,12 @@
 	</div>
 </div>
 
+<svelte:window
+	on:keydown={(e) => {
+		if (e.key === 'Escape' && showBulkConfirm) showBulkConfirm = false;
+	}}
+/>
+
 <!-- Bulk Accept Confirmation Modal -->
 {#if showBulkConfirm}
 	<div class="fixed inset-0 z-50 flex items-center justify-center">
@@ -1069,6 +1082,7 @@
 			class="absolute inset-0 bg-black/50"
 			on:click={() => (showBulkConfirm = false)}
 			tabindex="-1"
+			aria-label="Close dialog"
 		></button>
 		<div class="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
 			<h3 class="text-lg font-semibold text-gray-900 mb-2">Accept Strong Matches</h3>

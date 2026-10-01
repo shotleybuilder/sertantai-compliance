@@ -41,7 +41,7 @@ to clash with v0.1 fixes merged forward.
 | 1 | [Wizard on the corpus vocabulary](./01-wizard-corpus-vocabulary.md) | pending | — | Wizard options come from `GET /vocabulary`, not hard-coded lists (only 20 of 54 exist in any tree); #22 definitions only from in-force laws |
 | 2 | [API surface](./02-api-surface.md) | pending | — | OpenAPI spec for profile and evaluate; rate limiting (08 #11); MCP auth design against auth#23 |
 | 3 | [Engineering hygiene](./03-engineering-hygiene.md) | pending | — | CI builds and pushes images on `v*` tags (02 deferred); decide on `ChangeDetector.trigger_async/1`; dev-only CORS origins (08 #8) |
-| 4 | [Svelte 5 + GridLite 0.10 + Vite 8](../2026-09-25-svelte5-gridlite-upgrade.md) | suspended, ready to resume (#26 fixed 2026-09-30) | — (was "after v0.1"; `release/0.1` now keeps it out of v0.1) | npm audit clean; drop `legacy-peer-deps`. Best done before the pilot. It is a big frontend change, and v0.1 fixes merged forward will conflict with it more the later it lands |
+| 4 | [Svelte 5 + GridLite 0.10 + Vite 8](../2026-09-25-svelte5-gridlite-upgrade.md) | suspended, ready to resume: user's manual run sheet `docs/testing/runs/2026-10-01-svelte5-upgrade-manual.md` pending | — (was "after v0.1"; `release/0.1` now keeps it out of v0.1) | npm audit clean; drop `legacy-peer-deps`. Best done before the pilot. It is a big frontend change, and v0.1 fixes merged forward will conflict with it more the later it lands |
 
 ## Phase B: product work, ordered by pilot feedback (November)
 
@@ -65,6 +65,8 @@ The order below is provisional. Re-rank it against the `pilot` issues once v0.1.
 | Granular and aggregate model alongside org-and-decompose | 7 | User, 2026-09-25: "in time we should be able to run both models" |
 | Agent error triage | real prod errors (v0.1-08a wiring) | See below |
 | Screener accuracy from legal data | sertantai-legal#161, #144, #143, #149 | The v0.1 accuracy loop (v0.1-06) continues weekly. Apply categorical, authoritative fixes here; report data problems upstream |
+| Screen on `current_verdict` (as amended) + correlative holders, "my rights / my protections" (#37) | fractalaw's single final publish (via sertantai-legal) | Correlatives carry `{type, to, act}`; rule: recipient of the act → claim right, otherwise protected. Benchmark before and after. Ask legal to unmark the columns dev-only first |
+| Purpose vocabulary change in Baserow sync (#38) | the same publish (sertantai-legal#172) | `purpose` keeps `{values: [...]}`; new `purpose_profile` column. Legal sends the per-law change list by message before the publish |
 
 ### Agent error triage (detail)
 

@@ -1,6 +1,6 @@
 ---
-schedule_version: 2
-updated: 2026-09-30
+schedule_version: 3
+updated: 2026-10-01
 app_version: 0.2.0-dev (Svelte 5, v0.1 fixes #26-#32 merged)
 ---
 
@@ -236,8 +236,10 @@ runs are recorded and when to change it: [README.md](./README.md).
 ### STA-01 · Compliance dashboard [full]
 1. Open Stats.
 2. Expected: the Venn cards (**Action Queue** links to Screening), the
-   context line, Family Distribution, Assessment Posture (or its empty text),
-   and Pending Legal Changes with **Review changes** → Changes.
+   context line, Family Distribution, and (when changes are pending) Pending
+   Legal Changes with **Review changes** → Changes. There is no Assessment
+   Posture or Action Status card: they are off until they have a data
+   source (#36).
 3. The page scrolls to the bottom (see NAV-02).
 
 ## GLO: glossary (PGLite + GridLite)

@@ -25,7 +25,13 @@
 	}
 	let familyStats = $state<FamilyStat[]>([]);
 
-	// Server-side compliance metrics
+	// Server-side compliance metrics (Assessment Posture and Action Status cards).
+	// Off until something feeds them: they count assessment and action statuses
+	// pushed from a customer's compliance workspace (template webhook and
+	// CompliancePoller), and neither is wired up. Whether to build that source
+	// is #36. Set to true to fetch and show the cards again.
+	const ASSESSMENT_METRICS_LIVE = false;
+
 	interface ComplianceMetrics {
 		compliant: number;
 		non_compliant: number;
@@ -57,7 +63,9 @@
 			const [statsRes, evalResult, metricsRes, changesRes] = await Promise.all([
 				authFetch(`${API_URL}/api/screening/stats`),
 				evaluate().catch(() => null),
-				authFetch(`${API_URL}/api/screening/compliance-metrics`),
+				ASSESSMENT_METRICS_LIVE
+					? authFetch(`${API_URL}/api/screening/compliance-metrics`)
+					: Promise.resolve(null),
 				authFetch(`${API_URL}/api/screening/changes/summary`)
 			]);
 
@@ -77,7 +85,7 @@
 				toReview = evalResult.summary.venn?.action_queue ?? 0;
 			}
 
-			if (metricsRes.ok) complianceMetrics = await metricsRes.json();
+			if (metricsRes?.ok) complianceMetrics = await metricsRes.json();
 			if (changesRes.ok) changeSummary = await changesRes.json();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load dashboard';

@@ -107,7 +107,7 @@ Decided 2026-09-25 (user): **after v0.1**. Prod serves a static build, so the re
 - ✅ Released `gridlite-adapter-pglite` 0.8.0 with peer kit `^0.10.0` (2026-09-27, svelte-gridlite-kit#41)
 - ✅ Step 2: all 16 components on runes (`$props`, `$state`, `$derived`, `$effect`, `onclick`, `{@render}`), `$app/state`; no `svelte/legacy` imports; lint 0 warnings; unused svelte-query removed
 - ✅ Step 3a: automated first pass (Playwright, Firefox engine): 17 pass / 15 fail / 14 skip, **no upgrade regressions** → `docs/testing/runs/2026-09-29-svelte5-upgrade.md`; bugs raised as #26-#34
-- ⬜ Step 3b: manual run of the skipped cases (GridLite interactions, PRO-04, change feed with data) on schedule v2 (new run sheet). Unblocked: #26 fixed 2026-09-30. BRW-03 needs an ungrouped view (svelte-gridlite-kit#42)
+- ⏳ Step 3b: manual run → `docs/testing/runs/2026-10-01-svelte5-upgrade-manual.md` (schedule v3). 28 rows pre-filled from Playwright; the user's checklist is at the top (7 cases plus 6 optional/needs-data); Claude re-runs NAV-01, GLO-05, BRW-01, then PRO-03/07 after the pushState fix
 - ⬜ Fix `history.pushState` in the profile wizard → `pushState` from `$app/navigation` (PRO-03/07 warning; main only)
 - ⬜ Schedule wording corrections from the run's Findings: SCR-05, STA-01, CHG-03 (v2 on 2026-09-30 already did NAV-02, CHG-06, BRW-03)
 - ✅ Step 1, packages: Svelte 5.57, Vite 8.3, vite-plugin-svelte 7.3, vitest 5, svelte-check 4.7, kit 2.70.3, GridLite kit 0.10 + adapter 0.8.0; Tailwind moved from PostCSS to `@tailwindcss/vite`; lockfile regenerated; Docker build OK
